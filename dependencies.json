@@ -1,0 +1,26 @@
+{
+  "version": "0.1.0",
+  "architecture": "x64",
+  "toolchain": {"generator": "Visual Studio 17 2022", "toolset": "v143", "sdk": "10.0.22621.0", "cmakeMinimum": "3.25"},
+  "ffmpeg": {
+    "version": "8.0.1",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/8.0.1/ffmpeg-8.0.1-essentials_build.zip",
+    "sha256": "e2aaeaa0fdbc397d4794828086424d4aaa2102cef1fb6874f6ffd29c0b88b673",
+    "root": "ffmpeg-8.0.1-essentials_build",
+    "license": "GPL-3.0-or-later"
+  },
+  "qpdf": {
+    "version": "12.4.1",
+    "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.1/qpdf-12.4.1-mingw64.zip",
+    "sha256": "6a47eeddc8ff712a6e003314daae25569402c6e904ba82b7b9181d7b0301b689",
+    "root": "qpdf-12.4.1-mingw64",
+    "license": "Apache-2.0; see bundled dependency notices"
+  },
+  "inno": {
+    "version": "6.4.3",
+    "url": "https://api.nuget.org/v3-flatcontainer/tools.innosetup/6.4.3/tools.innosetup.6.4.3.nupkg",
+    "sha256": "9d67a2b1155ca5bc825475ceb907aa357c5feb42e474cfd5347eddeef5ad92a5",
+    "root": "tools",
+    "license": "Inno Setup license; build tool only"
+  }
+}

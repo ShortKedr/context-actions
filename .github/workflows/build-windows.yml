@@ -1,0 +1,25 @@
+name: Windows preview
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .build-tools/downloads
+          key: windows-inputs-${{ hashFiles('dependencies.json') }}
+      - name: Build, lightweight tests and installer
+        shell: pwsh
+        run: ./scripts/build-and-package.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ContextActions-win-x64
+          path: |
+            dist/*setup.exe
+            dist/*.sha256
+            dist/reports/
+          if-no-files-found: warn
