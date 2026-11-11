@@ -4,7 +4,7 @@ Compress videos, resize images, combine scans into a PDF, and rename files in ba
 
 [![Watch the 10-second walkthrough of converting a video to MP4 in Context Actions](docs/showcase/mp4-walkthrough.gif)](docs/showcase/demo.mp4)
 
-[Open the interactive HTML tour](docs/showcase/index.html) in a browser from your local checkout. It recreates the File Explorer and WinUI 3 preview screens with a sample file.
+The walkthrough recreates the File Explorer and WinUI 3 preview screens with a sample file.
 
 ## What you can do
 
