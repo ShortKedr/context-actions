@@ -17,6 +17,9 @@ version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist
 bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")
 identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")
 lipo "$app/Contents/MacOS/ContextActions" -verify_arch arm64 x86_64
+archive_engine="$app/Contents/MacOS/ContextActionsArchive"
+lipo "$archive_engine" -verify_arch arm64 x86_64
+codesign --force --sign - "$archive_engine"
 codesign --force --sign - "$app"
 codesign --verify --strict --all-architectures "$app"
 

@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Context Actions
-Comment=Convert media, create PDFs, and rename files in batches
+Comment=Convert media, repack archives, create PDFs, and rename files in batches
 Exec=context-actions -- %F
 Icon=io.github.ShortKedr.ContextActions
 Terminal=false
 Categories=Utility;FileTools;
-MimeType=video/mp4;video/x-matroska;video/quicktime;video/x-msvideo;video/webm;video/x-m4v;video/x-ms-wmv;video/mp2t;audio/mpeg;audio/mp4;audio/aac;audio/vnd.wave;audio/flac;audio/ogg;audio/x-opus+ogg;audio/x-aiff;audio/x-ms-wma;image/jpeg;image/png;image/webp;image/bmp;image/tiff;image/gif;application/pdf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/plain;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel;application/vnd.oasis.opendocument.spreadsheet;text/csv;
+MimeType=video/mp4;video/x-matroska;video/quicktime;video/x-msvideo;video/webm;video/x-m4v;video/x-ms-wmv;video/mp2t;audio/mpeg;audio/mp4;audio/aac;audio/vnd.wave;audio/flac;audio/ogg;audio/x-opus+ogg;audio/x-aiff;audio/x-ms-wma;image/jpeg;image/png;image/webp;image/bmp;image/tiff;image/gif;application/pdf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/plain;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel;application/vnd.oasis.opendocument.spreadsheet;text/csv;application/zip;application/x-tar;application/x-compressed-tar;application/x-7z-compressed;application/vnd.rar;application/x-rar;

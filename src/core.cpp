@@ -14,6 +14,18 @@ namespace {
 [[noreturn]] void fail(const std::wstring& message) { throw std::runtime_error(utf8(message)); }
 std::wstring lower(std::wstring s) { for (auto& c : s) c = towlower(c); return s; }
 bool contains(const wchar_t* list, const std::wstring& extension) { return std::wstring(list).find(L"|" + extension + L"|") != std::wstring::npos; }
+std::wstring archiveFormat(const fs::path& path) {
+    const auto ext = lower(pathText(path.extension()));
+    if (ext == L".tgz" || (ext == L".gz" && lower(pathText(path.stem().extension())) == L".tar"))
+        return L"tar.gz";
+    if (ext == L".zip" || ext == L".tar" || ext == L".7z" || ext == L".rar") return ext.substr(1);
+    return {};
+}
+std::wstring archiveStem(const fs::path& path) {
+    auto stem = path.stem();
+    if (archiveFormat(path) == L"tar.gz" && lower(pathText(path.extension())) == L".gz") stem = stem.stem();
+    return pathText(stem);
+}
 std::wstring randomId() {
     std::random_device random;
     std::wostringstream id;
@@ -104,7 +116,7 @@ void mediaReport(const fs::path& source, const fs::path& output, std::atomic_boo
 
 std::wstring outputExtension(const Options& options) {
     switch (options.action) {
-    case Action::image: case Action::audio: case Action::remux: return L"." + outputFormat(options);
+    case Action::image: case Action::audio: case Action::remux: case Action::repack: return L"." + outputFormat(options);
     case Action::pdf: case Action::word: case Action::excel: return L".pdf";
     case Action::frame: return L".png";
     case Action::mediaInfo: return L".txt";
@@ -121,10 +133,11 @@ Kind kind(const fs::path& path) {
     if (ext == L".pdf") return Kind::pdf;
     if (contains(L"|.docx|.doc|.odt|.rtf|.txt|",ext)) return Kind::document;
     if (contains(L"|.xlsx|.xls|.ods|.csv|",ext)) return Kind::sheet;
+    if (!archiveFormat(path).empty()) return Kind::archive;
     return Kind::other;
 }
 const char* actionKey(Action a) {
-    static const char* keys[]{"more","compress","h264","h265","telegram","image","pdf","rename","word","excel","documents","sheets","audio","remux","frame","media-info"};
+    static const char* keys[]{"more","compress","h264","h265","telegram","image","pdf","rename","word","excel","documents","sheets","audio","remux","frame","media-info","repack"};
     const auto i = static_cast<size_t>(a);
     if (i >= std::size(keys)) fail(tr("invalid"));
     return keys[i];
@@ -135,24 +148,35 @@ std::wstring trAction(Action action) {
     return tr(actionKey(action));
 }
 Action parseAction(const std::wstring& value) {
-    for (int i=0;i<=static_cast<int>(Action::mediaInfo);++i) if (actionId(static_cast<Action>(i)) == value) return static_cast<Action>(i);
+    for (int i=0;i<=static_cast<int>(Action::repack);++i) if (actionId(static_cast<Action>(i)) == value) return static_cast<Action>(i);
     fail(tr("invalid"));
 }
 std::vector<Action> catalog() {
     return {Action::compress,Action::h264,Action::h265,Action::telegram,Action::image,Action::pdf,
-        Action::audio,Action::remux,Action::frame,Action::mediaInfo,Action::rename,Action::word,Action::excel,Action::documents,Action::sheets};
+        Action::audio,Action::remux,Action::frame,Action::mediaInfo,Action::repack,Action::rename,Action::word,Action::excel,Action::documents,Action::sheets};
 }
 std::vector<std::wstring> outputFormats(Action action) {
     switch (action) {
     case Action::image: return {L"png",L"jpg",L"webp",L"bmp",L"tiff",L"gif"};
     case Action::audio: return {L"mp3",L"m4a",L"wav",L"flac",L"opus"};
     case Action::remux: return {L"mkv",L"mp4",L"mov"};
+    case Action::repack: return {L"zip",L"tar.gz",L"7z"};
     default: return {};
     }
 }
+std::vector<std::wstring> outputFormats(Action action, const std::vector<fs::path>& files) {
+    auto formats = outputFormats(action);
+    if (action == Action::repack) {
+        for (const auto& file : files) {
+            std::erase(formats, archiveFormat(file));
+            if (formats.empty()) break;
+        }
+    }
+    return formats;
+}
 std::wstring outputFormat(const Options& options) {
     if (!options.format.empty()) return lower(options.format);
-    const auto formats = outputFormats(options.action);
+    const auto formats = outputFormats(options.action, options.files);
     return formats.empty() ? std::wstring{} : formats.front();
 }
 bool accepts(Action action, const std::vector<fs::path>& files) {
@@ -167,6 +191,7 @@ bool accepts(Action action, const std::vector<fs::path>& files) {
         case Action::mediaInfo: return k == Kind::audio || k == Kind::video || k == Kind::image;
         case Action::image: return k == Kind::image;
         case Action::pdf: return k == Kind::image || k == Kind::pdf;
+        case Action::repack: return k == Kind::archive;
         case Action::rename: return true;
         case Action::word: case Action::documents: return k == Kind::document;
         case Action::excel: case Action::sheets: return k == Kind::sheet;
@@ -178,6 +203,7 @@ std::wstring unavailableReason(Action action, const std::vector<fs::path>& files
     if (action == Action::documents || action == Action::sheets) return tr("next");
     if (files.empty()) return tr("select");
     if (!accepts(action,files)) return tr("unsupported");
+    if (action == Action::repack && outputFormats(action, files).empty()) return tr("archiveFormatsExhausted");
     if (action == Action::word || action == Action::excel)
         if (officeCapability(action == Action::excel) == Capability::unavailable) return officeUnavailableReason(action == Action::excel);
     return {};
@@ -193,7 +219,7 @@ void validate(const Options& o) {
     if(o.action==Action::rename||o.action==Action::pdf)
         for (const auto& path : o.files) if (!fs::is_regular_file(path)) fail(tr("missing")+pathText(path));
     if (o.action!=Action::rename && !o.output.empty() && fs::exists(o.output) && !fs::is_directory(o.output)) fail(tr("invalid"));
-    const auto formats = outputFormats(o.action);
+    const auto formats = outputFormats(o.action, o.files);
     if (!formats.empty() && std::find(formats.begin(),formats.end(),outputFormat(o)) == formats.end()) fail(tr("invalid"));
     if (o.action == Action::image || o.action == Action::pdf) {
         for (const auto& path : o.files)
@@ -387,7 +413,8 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
             if(!fs::is_regular_file(source))fail(tr("missing")+pathText(source));
             const auto directory=o.output.empty()?source.parent_path():fs::absolute(o.output); fs::create_directories(directory);
             Temporary scratch(directory);
-            auto output=uniqueOutput(directory,pathText(source.stem())+L"_"+actionId(o.action),extension);
+            const auto stem = o.action == Action::repack ? archiveStem(source) : pathText(source.stem())+L"_"+actionId(o.action);
+            auto output=uniqueOutput(directory,stem,extension);
             auto temporary=scratch.path/textPath(L"result"+extension);
             if(notify)notify({i,0,tr("working"),{}});
             if(o.action==Action::pdf) {
@@ -427,6 +454,14 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                     arguments = {L"@" + pathText(response)};
                 }
                 engineSuccess(runProcess(engine("qpdf"), arguments, cancel));
+            } else if (o.action == Action::repack) {
+#ifdef _WIN32
+                const auto helper = appDirectory() / L"ContextActionsArchive.exe";
+#else
+                const auto helper = appDirectory() / "ContextActionsArchive";
+#endif
+                engineSuccess(runProcess(helper, {archiveFormat(source), extension.substr(1),
+                    pathText(source), pathText(temporary)}, cancel));
             } else if(o.action==Action::image||o.action==Action::frame) imageConversion(o,source,temporary,cancel);
             else if(o.action==Action::mediaInfo) mediaReport(source,temporary,cancel);
             else if(o.action==Action::word||o.action==Action::excel) exportOfficePdf(source,temporary,o.action==Action::excel,cancel);

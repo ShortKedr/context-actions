@@ -59,12 +59,13 @@ GtkWidget* scroller(GtkWidget* child) {
     return widget;
 }
 
-void field(GtkWidget* box, const char* key, GtkWidget* widget) {
+GtkWidget* field(GtkWidget* box, const char* key, GtkWidget* widget) {
     auto* caption = leftLabel(label(key));
     gtk_label_set_wrap(GTK_LABEL(caption), true);
     gtk_label_set_mnemonic_widget(GTK_LABEL(caption), widget);
     gtk_box_append(GTK_BOX(box), caption);
     gtk_box_append(GTK_BOX(box), widget);
+    return caption;
 }
 
 GtkWidget* spin(GtkWidget* box, const char* key, int value, int maximum) {
@@ -231,10 +232,11 @@ private:
         if (!initial_.format.empty()) {
             ca::Options formatOptions = initial_;
             formatOptions.action = selectedAction();
+            formatOptions.files = files_;
             formatSelections_[formatOptions.action] = ca::outputFormat(formatOptions);
         }
         formatField_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-        field(formatField_, "format", format_);
+        formatLabel_ = field(formatField_, "format", format_);
         gtk_box_append(GTK_BOX(media_), formatField_);
         dimensions_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
         gtk_box_append(GTK_BOX(media_), dimensions_);
@@ -319,6 +321,7 @@ private:
     }
 
     Action suggestedAction() const {
+        if (!files_.empty() && ca::accepts(Action::repack, files_)) return Action::repack;
         for (auto action : {Action::compress, Action::audio, Action::image, Action::pdf, Action::word,
                 Action::excel, Action::mediaInfo})
             if (ca::accepts(action, files_)) return action;
@@ -336,11 +339,13 @@ private:
         const bool video = isVideo(action);
         const bool image = action == Action::image;
         const bool rename = action == Action::rename;
-        if (action != formatAction_) {
+        auto formats = ca::outputFormats(action, files_);
+        if (action != formatAction_ || formats != formats_) {
             const auto previous = gtk_drop_down_get_selected(GTK_DROP_DOWN(format_));
             if (previous < formats_.size()) formatSelections_[formatAction_] = formats_[previous];
             formatAction_ = action;
-            formats_ = ca::outputFormats(action);
+            formats_ = std::move(formats);
+            setText(formatLabel_, label(action == Action::repack ? "archiveFormat" : "format"));
             auto* names = gtk_string_list_new(nullptr);
             for (const auto& format : formats_) gtk_string_list_append(names, ca::utf8(format).c_str());
             gtk_drop_down_set_model(GTK_DROP_DOWN(format_), G_LIST_MODEL(names));
@@ -713,7 +718,7 @@ private:
     GtkFileChooserNative* chooser_ = nullptr;
     GtkWidget *fileList_ = nullptr, *add_ = nullptr, *remove_ = nullptr, *up_ = nullptr, *down_ = nullptr;
     GtkWidget *controls_ = nullptr, *action_ = nullptr, *availability_ = nullptr, *media_ = nullptr;
-    GtkWidget *formatField_ = nullptr, *format_ = nullptr, *dimensions_ = nullptr, *quality_ = nullptr, *width_ = nullptr;
+    GtkWidget *formatField_ = nullptr, *formatLabel_ = nullptr, *format_ = nullptr, *dimensions_ = nullptr, *quality_ = nullptr, *width_ = nullptr;
     GtkWidget *video_ = nullptr, *fps_ = nullptr, *target_ = nullptr, *mute_ = nullptr, *frame_ = nullptr;
     GtkWidget *rename_ = nullptr, *pattern_ = nullptr, *start_ = nullptr, *prefix_ = nullptr;
     GtkWidget *suffix_ = nullptr, *find_ = nullptr, *replace_ = nullptr, *previewButton_ = nullptr;

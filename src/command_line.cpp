@@ -55,19 +55,22 @@ void parseArguments(const std::vector<std::wstring>& arguments, CommandLine& com
         else if (arg.starts_with(L"--")) throw std::runtime_error("Unknown option: " + utf8(arg));
         else options.files.push_back(fs::absolute(textPath(arg)));
     }
+    if (command.immediate && !command.headless && !command.help && options.action == Action::repack)
+        validate(options);
 }
 
 std::optional<int> runCommandLine(const CommandLine& command) {
     if (command.help) {
         std::cout << "Context Actions [options] [--] [files...]\n"
                   << "  --action compress|h264|h265|telegram|image|pdf|rename|word|excel\n"
-                  << "           audio|remux|frame|media-info\n"
+                  << "           audio|remux|frame|media-info|repack\n"
                   << "  --headless --report PATH    Run a batch and write a new report\n"
                   << "  --run                      Start the batch when the window opens\n"
                   << "  --output DIRECTORY         Use a separate output directory\n"
                   << "  --quality N --width N --fps N --target-mb N --mute\n"
                   << "  --format png|jpg|webp|bmp|tiff|gif for image, --first-frame for image or PDF\n"
                   << "  --format mp3|m4a|wav|flac|opus for audio, mkv|mp4|mov for remux\n"
+                  << "  --format zip|tar.gz|7z for archive repack\n"
                   << "  --pattern TEXT --prefix TEXT --suffix TEXT --find TEXT --replace TEXT --start N\n";
         return 0;
     }

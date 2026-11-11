@@ -90,9 +90,76 @@ try {
     Invoke-Control 'UndoRename'
     Wait-For { Test-Path -LiteralPath $source } 'Undo did not restore the source.' | Out-Null
     $report = "PASS: configure-first launch, rename preview, Settings round trip, compact-to-full switch, real rename, narrow result footer and undo."
+
+    $process.CloseMainWindow() | Out-Null
+    if (-not $process.WaitForExit(10000)) { throw 'Rename test window did not close normally.' }
+    $fixture = Join-Path $scratch 'archive-fixture'
+    $zip = Join-Path $scratch 'repack.zip'
+    $tarGz = Join-Path $scratch 'repack.tar.gz'
+    $sevenZip = Join-Path $scratch 'repack.7z'
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    Set-Content -LiteralPath (Join-Path $fixture 'item.txt') -Value 'Archive UI smoke' -Encoding ascii
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($fixture, $zip)
+    $zipHash = (Get-FileHash -LiteralPath $zip).Hash
+    $process = Start-Process -FilePath $AppPath -ArgumentList @('--action','repack','--',('"' + $zip + '"')) -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+    $window = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition) } 'Repack test window did not appear.'
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ArchiveFormat')
+    $formats = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) } 'Archive format selector did not appear.'
+    $selection = [System.Windows.Automation.SelectionPattern]$formats.GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern)
+    $selectedFormat = $selection.Current.GetSelection()
+    if ($selectedFormat.Count -ne 1 -or $selectedFormat[0].Current.Name -ne 'tar.gz') { throw 'ZIP did not default to TAR.GZ.' }
+    $expand = [System.Windows.Automation.ExpandCollapsePattern]$formats.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+    $expand.Expand()
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '7z')
+    Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) } '7Z was not offered as a target for ZIP.' | Out-Null
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'zip')
+    if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)) { throw 'ZIP was offered as a target for a ZIP source.' }
+    $expand.Collapse()
+    if (Test-Path -LiteralPath $tarGz) { throw 'Configure-first launch started repacking before Run.' }
+    Invoke-Control 'Run'
+    Wait-For { Test-Path -LiteralPath $tarGz } 'Repack did not publish the TAR.GZ file.' | Out-Null
+    $item = & "$env:SystemRoot\System32\tar.exe" -xOf $tarGz 'item.txt'
+    if ($LASTEXITCODE -ne 0 -or $item -ne 'Archive UI smoke') { throw 'Repack changed or omitted the archived file.' }
+    if ((Get-FileHash -LiteralPath $zip).Hash -ne $zipHash) { throw 'Repack changed the source archive.' }
+    Wait-For { $formats.Current.IsEnabled } 'Archive selector did not become enabled after the first repack.' | Out-Null
+    $expand.Expand()
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '7z')
+    $option = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) } '7Z option did not reappear.'
+    ([System.Windows.Automation.SelectionItemPattern]$option.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()
+    $expand.Collapse()
+    Invoke-Control 'Run'
+    Wait-For { Test-Path -LiteralPath $sevenZip } 'Repack did not use the selected 7Z target.' | Out-Null
+    $item = & "$env:SystemRoot\System32\tar.exe" -xOf $sevenZip 'item.txt'
+    if ($LASTEXITCODE -ne 0 -or $item -ne 'Archive UI smoke') { throw 'Repack changed or omitted the 7Z archived file.' }
+
+    $process.CloseMainWindow() | Out-Null
+    if (-not $process.WaitForExit(10000)) { throw 'Repack test window did not close normally.' }
+    $process = Start-Process -FilePath $AppPath -ArgumentList @('--action','repack','--',('"' + $zip + '"'),('"' + $tarGz + '"'),('"' + $sevenZip + '"')) -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+    $window = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition) } 'Archive batch window did not appear.'
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ArchiveFormat')
+    $formats = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) } 'Archive batch format selector did not appear.'
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Run')
+    $run = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) } 'Archive batch Run button did not appear.'
+    if ($formats.Current.IsEnabled -or $run.Current.IsEnabled) { throw 'Archive batch permitted Run without a common target.' }
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Files')
+    $files = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
+    $rows = $files.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)
+    if ($rows.Count -ne 3) { throw 'Archive batch did not show all input archives.' }
+    ([System.Windows.Automation.SelectionItemPattern]$rows[2].GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()
+    Invoke-Control 'RemoveFiles'
+    Wait-For { $formats.Current.IsEnabled -and $run.Current.IsEnabled } 'Removing 7Z did not restore the common target.' | Out-Null
+    $selection = [System.Windows.Automation.SelectionPattern]$formats.GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern)
+    $selectedFormat = $selection.Current.GetSelection()
+    if ($selectedFormat.Count -ne 1 -or $selectedFormat[0].Current.Name -ne '7z') { throw 'ZIP and TAR.GZ did not select 7Z as the common target.' }
+    $report += ' Archive launch, target selection, ZIP repack and batch target refresh passed.'
+
     if (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $AppPath) 'engines\ffmpeg.exe')) {
         $process.CloseMainWindow() | Out-Null
-        if (-not $process.WaitForExit(10000)) { throw 'Rename test window did not close normally.' }
+        if (-not $process.WaitForExit(10000)) { throw 'Repack test window did not close normally.' }
         $broken = Join-Path $scratch 'broken.png'
         Set-Content -LiteralPath $broken -Value 'Invalid image for multiline diagnostic regression' -Encoding ascii
         $process = Start-Process -FilePath $AppPath -ArgumentList @('--action','image','--',('"' + $broken + '"')) -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru

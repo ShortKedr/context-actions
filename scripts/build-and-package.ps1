@@ -67,7 +67,7 @@ try {
     if (Test-Path -LiteralPath $installer) { Remove-Item -LiteralPath $installer -Force }
     if (Test-Path -LiteralPath "$installer.sha256") { Remove-Item -LiteralPath "$installer.sha256" -Force }
     Reset-OutputDirectory $reports
-    $testStatus = [ordered]@{ core='not run'; shellContract='not run'; application='not run'; ui='not run'; shell='not run'; office='not run'; skipTests=[bool]$SkipTests }
+    $testStatus = [ordered]@{ core='not run'; archiveMatrix='not run'; shellContract='not run'; application='not run'; ui='not run'; shell='not run'; office='not run'; skipTests=[bool]$SkipTests }
     $testStatus | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reports 'test-status.json') -Encoding utf8
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $installation = @(& $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)
@@ -76,13 +76,14 @@ try {
     $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
     if (-not (Test-Path -LiteralPath $cmake)) { $cmake = (Get-Command cmake -ErrorAction Stop).Source }
     $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
-    Invoke-Tool $cmake @('--preset','windows-x64')
+    Invoke-Tool $cmake @('--preset','windows-x64',"-DCONTEXT_ACTIONS_OFFLINE=$([bool]$Offline)")
     Invoke-Tool $cmake @('--build','--preset','release')
     & (Join-Path $PSScriptRoot 'build-ui.ps1') -Offline:$Offline
     if (-not $?) { throw 'WinUI build failed.' }
     if (-not $SkipTests) {
         Invoke-Tool $ctest @('--preset','release','--output-junit',(Join-Path $reports 'core-tests.xml'))
         $testStatus.core = 'passed'
+        $testStatus.archiveMatrix = 'passed'
         $testStatus.shellContract = 'passed'
         $testStatus | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reports 'test-status.json') -Encoding utf8
     }
@@ -99,7 +100,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $destination
     }
-    foreach ($name in @('ContextActions.exe','ContextActionsShell.dll')) {
+    foreach ($name in @('ContextActions.exe','ContextActionsArchive.exe','ContextActionsShell.dll')) {
         Assert-PublicBinary (Join-Path $stage $name)
     }
     $engines = Join-Path $stage 'engines'; $licenses = Join-Path $stage 'licenses'
@@ -168,7 +169,7 @@ try {
     }
     $inventory = @(Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object {
         $relative = $_.FullName.Substring($stage.Length + 1)
-        $component = if ($relative -match 'ffmpeg|ffprobe') { 'FFmpeg' } elseif ($relative.StartsWith('engines\') -or $relative.StartsWith('licenses\qpdf\')) { 'qpdf and runtime' } elseif ($relative.StartsWith('licenses\windows-app-sdk\') -or ($uiFiles.ContainsKey($relative) -and $relative -notmatch '^(ContextActions\.|App\.xbf$|MainWindow\.xbf$)')) { 'Windows App SDK' } else { 'Context Actions' }
+        $component = if ($relative -match 'ffmpeg|ffprobe') { 'FFmpeg' } elseif ($relative.StartsWith('engines\') -or $relative.StartsWith('licenses\qpdf\')) { 'qpdf and runtime' } elseif ($relative -eq 'ContextActionsArchive.exe' -or $relative.StartsWith('licenses\archive\')) { 'Archive engine (libarchive, zlib, liblzma)' } elseif ($relative.StartsWith('licenses\windows-app-sdk\') -or ($uiFiles.ContainsKey($relative) -and $relative -notmatch '^(ContextActions\.|App\.xbf$|MainWindow\.xbf$)')) { 'Windows App SDK' } else { 'Context Actions' }
         [pscustomobject]@{ path=$relative; component=$component; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     })
     $inventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $reports 'components.json') -Encoding utf8

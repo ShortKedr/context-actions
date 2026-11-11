@@ -39,7 +39,7 @@ int wmain(int argc,wchar_t** argv){
                 expect(commands.emplace(action,command).second,"Unique command identifiers");ca::check(command->GetFlags(&flags));expect(flags==ECF_DEFAULT,"Leaf command flag");
                 ca::check(command->GetTitle(nullptr,&title));std::wstring text=title;CoTaskMemFree(title);expect(!text.empty(),"Localized command title");
             }
-            expect(commands.size()==14&&!commands.contains(ca::Action::documents)&&!commands.contains(ca::Action::sheets),"Supported commands only, including More");
+            expect(commands.size()==15&&!commands.contains(ca::Action::documents)&&!commands.contains(ca::Action::sheets),"Supported commands only, including More");
             ca::check(enumeration->Reset());ca::check(enumeration->Skip(1));ca::ComPtr<IEnumExplorerCommand> clone;ca::check(enumeration->Clone(&clone));
             ca::ComPtr<IExplorerCommand> originalNext,cloneNext;ca::check(enumeration->Next(1,&originalNext,nullptr));ca::check(clone->Next(1,&cloneNext,nullptr));
             GUID first{},second{};ca::check(originalNext->GetCanonicalName(&first));ca::check(cloneNext->GetCanonicalName(&second));expect(first==second,"Clone preserves position");expect(enumeration->Skip(100)==S_FALSE,"Skip reports end");
@@ -62,6 +62,15 @@ int wmain(int argc,wchar_t** argv){
             checkSelection({L"track.wav",L"song.opus"},{A::more,A::audio,A::mediaInfo,A::rename});
             checkSelection({L"track.wav",L"second.mov"},{A::more,A::audio,A::mediaInfo,A::rename});
             checkSelection({L"track.wav",L"picture.png"},{A::more,A::mediaInfo,A::rename});
+            checkSelection({L"архив.ZIP",L"backup.tgz",L"other.rar"},{A::more,A::repack,A::rename});
+            checkSelection({L"backup.tar",L"other.7z"},{A::more,A::repack,A::rename});
+            checkSelection({L"backup.tar",L"notes.txt"},{A::more,A::rename});
+            auto allTargets=selection(root,{L"архив.ZIP",L"backup.tgz",L"other.7z"});
+            ca::check(commands.at(A::repack)->GetState(allTargets.Get(),FALSE,&state));
+            expect(state==ECS_DISABLED,"Repack disabled without a common target");
+            expect(commands.at(A::repack)->Invoke(allTargets.Get(),nullptr)==E_INVALIDARG,"Invocation without a common target rejected");
+            auto mixed=selection(root,{L"backup.tar",L"notes.txt"});
+            expect(commands.at(A::repack)->Invoke(mixed.Get(),nullptr)==E_INVALIDARG,"Invalid archive invocation rejected");
             auto image=selection(root,{L"picture.png"});expect(commands.at(A::h264)->Invoke(image.Get(),nullptr)==E_INVALIDARG,"Unsupported invocation rejected");
             ca::setOfficeCapability(false,ca::Capability::unavailable);auto doc=selection(root,{L"document.docx"});ca::check(commands.at(A::word)->GetState(doc.Get(),FALSE,&state));expect(state==ECS_DISABLED,"Unavailable Office disabled");
         }

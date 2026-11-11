@@ -22,6 +22,18 @@ function App([string]$Action,[string]$Folder,[string[]]$Files,[string[]]$Options
     return @(Get-ChildItem -LiteralPath $output -File -ErrorAction SilentlyContinue)
 }
 try {
+    $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    $archivePayload = Join-Path $testDirectory 'archive-payload.txt'
+    $archiveSource = Join-Path $testDirectory 'repack-source.tar'
+    Set-Content -LiteralPath $archivePayload -Value 'Context Actions archive smoke' -Encoding ascii
+    Native $tar @('-cf',$archiveSource,'-C',$testDirectory,'archive-payload.txt')
+    $archiveHash = (Get-FileHash -LiteralPath $archiveSource).Hash
+    $repacked = @(App 'repack' 'repack' @($archiveSource) @('--format','tar.gz'))
+    Check ($repacked.Count -eq 1 -and $repacked[0].Name -eq 'repack-source.tar.gz') 'Archive repack output is missing'
+    $repackedContents = & $tar -xOf $repacked[0].FullName 'archive-payload.txt'
+    Check ($LASTEXITCODE -eq 0 -and $repackedContents -eq 'Context Actions archive smoke') 'Repacked archive contents differ'
+    Check ((Get-FileHash -LiteralPath $archiveSource).Hash -eq $archiveHash) 'Archive repack changed the source'
+
     $decoders = & $ffmpeg -hide_banner -decoders
     Check ($LASTEXITCODE -eq 0) 'Cannot list bundled FFmpeg decoders'
     Check ([bool]($decoders -match '^\s*V\S*\s+libdav1d\s')) 'Bundled FFmpeg requires libdav1d to decode NVIDIA AV1 recordings'

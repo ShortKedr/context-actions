@@ -10,8 +10,8 @@
 
 namespace ca {
 namespace fs = std::filesystem;
-enum class Kind { other, video, image, pdf, document, sheet, audio };
-enum class Action { more, compress, h264, h265, telegram, image, pdf, rename, word, excel, documents, sheets, audio, remux, frame, mediaInfo };
+enum class Kind { other, video, image, pdf, document, sheet, audio, archive };
+enum class Action { more, compress, h264, h265, telegram, image, pdf, rename, word, excel, documents, sheets, audio, remux, frame, mediaInfo, repack };
 enum class Capability { unknown, available, unavailable };
 struct Options {
     Action action = Action::more;
@@ -54,6 +54,7 @@ const char* actionKey(Action action);
 std::wstring trAction(Action action);
 std::vector<Action> catalog();
 std::vector<std::wstring> outputFormats(Action action);
+std::vector<std::wstring> outputFormats(Action action, const std::vector<fs::path>& files);
 std::wstring outputFormat(const Options& options);
 bool accepts(Action action, const std::vector<fs::path>& files);
 std::wstring unavailableReason(Action action, const std::vector<fs::path>& files);

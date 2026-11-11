@@ -55,7 +55,8 @@ public:
     IFACEMETHODIMP Invoke(IShellItemArray* items,IBindCtx*) override{
         try{
             ca::Options options;options.action=action;options.files=selection(items);if(options.files.empty())return E_INVALIDARG;
-            if(!ca::accepts(action,options.files))return E_INVALIDARG;
+            if(!ca::accepts(action,options.files)||
+                (action==ca::Action::repack&&!ca::unavailableReason(action,options.files).empty()))return E_INVALIDARG;
             auto job=ca::writeJob(options);std::vector<std::wstring> args{L"--job",job.wstring()};
             try{ca::launch(directory()/L"ContextActions.exe",args);}catch(...){ca::consumeJob(job);throw;}
             return S_OK;

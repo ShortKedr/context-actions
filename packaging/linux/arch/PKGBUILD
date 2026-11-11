@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Batch media conversion, PDF assembly, and file renaming'
 arch=('x86_64')
 url='https://github.com/ShortKedr/context-actions'
-license=('MIT')
+license=('MIT' 'BSD-2-Clause' 'BSD-3-Clause' 'CC0-1.0' 'ISC' 'Zlib' '0BSD')
 depends=('glibc' 'glib2' 'gtk4' 'libgcc' 'libstdc++' 'ffmpeg' 'qpdf' 'hicolor-icon-theme' 'nautilus-python')
 makedepends=('cmake' 'ninja')
 optdepends=('libreoffice-fresh: document and spreadsheet PDF export'
@@ -25,4 +25,6 @@ check() {
 package() {
     DESTDIR="$pkgdir" cmake --install "$srcdir/build"
     install -Dm644 "$startdir/../../../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -m 0644 "$pkgdir/usr/share/doc/$pkgname/licenses/archive/"*.txt \
+        "$pkgdir/usr/share/licenses/$pkgname/"
 }

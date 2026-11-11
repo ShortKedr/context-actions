@@ -92,11 +92,15 @@ if [[ $operation == uninstall ]]; then
 fi
 
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+archive_licenses="$source_dir/usr/share/doc/context-actions/licenses/archive"
 [[ -f $source_dir/VERSION && -x $source_dir/usr/bin/context-actions &&
+   -x $source_dir/usr/bin/ContextActionsArchive &&
    -f $source_dir/usr/share/applications/$app_id.desktop &&
    -f $source_dir/usr/share/nautilus-python/extensions/context_actions.py &&
    -f $source_dir/usr/share/kio/servicemenus/$app_id.servicemenu.desktop &&
    -f $source_dir/usr/share/icons/hicolor/256x256/apps/$app_id.png &&
+   -f $archive_licenses/libarchive.txt && -f $archive_licenses/zlib.txt &&
+   -f $archive_licenses/liblzma.txt &&
    -f $source_dir/usr/share/doc/context-actions/LICENSE ]] ||
     fail 'Run the installer from an extracted Context Actions Linux app archive.'
 version=$(<"$source_dir/VERSION")
@@ -132,9 +136,13 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 install -m 0755 -- "$source_dir/usr/bin/context-actions" "$stage/context-actions"
+install -m 0755 -- "$source_dir/usr/bin/ContextActionsArchive" "$stage/ContextActionsArchive"
 install -m 0755 -- "$source_dir/install.sh" "$stage/install.sh"
 install -m 0644 -- "$source_dir/VERSION" "$stage/VERSION"
 install -m 0644 -- "$source_dir/usr/share/doc/context-actions/LICENSE" "$stage/LICENSE"
+install -d -- "$stage/licenses/archive"
+install -m 0644 -- "$archive_licenses/libarchive.txt" "$archive_licenses/zlib.txt" \
+    "$archive_licenses/liblzma.txt" "$stage/licenses/archive/"
 install -m 0644 -- "$source_dir/usr/share/icons/hicolor/256x256/apps/$app_id.png" "$stage/$app_id.png"
 install -m 0644 -- "$source_dir/usr/share/nautilus-python/extensions/context_actions.py" \
     "$stage/context_actions.py"

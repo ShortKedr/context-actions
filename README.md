@@ -11,6 +11,7 @@ The walkthrough recreates the File Explorer and WinUI 3 preview screens with a s
 - **Video.** Compress or convert to H.264 or H.265 MP4. Set quality, maximum width, frame rate, audio, and a file size limit, or use the silent Telegram preset.
 - **Images.** Convert among JPEG, PNG, WebP, BMP, TIFF, and GIF, and resize without changing proportions.
 - **PDF.** Create a PDF from images or merge images and existing PDFs in the order you choose.
+- **Archives.** Repack ZIP, TAR, TAR.GZ, 7Z, and RAR archives to a different format. Choose ZIP, TAR.GZ, or 7Z and keep the source archive.
 - **Batch rename.** Apply patterns, numbering, prefixes, suffixes, or text replacement. Preview the new names and undo the last rename when the files are unchanged and their original names are available.
 - **Office to PDF.** Export supported documents and spreadsheets with Microsoft Word and Excel on Windows or LibreOffice Writer and Calc on macOS and Linux.
 

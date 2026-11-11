@@ -107,6 +107,7 @@ void showError(NSWindow* window, NSString* message) {
     ca::Options _options;
     std::vector<ca::Action> _actions;
     ca::Action _formatAction;
+    std::vector<std::wstring> _formats;
     std::map<ca::Action, std::wstring> _formatSelections;
     std::vector<ca::Rename> _preview;
     std::vector<ca::fs::path> _pendingFiles, _outputs;
@@ -119,6 +120,7 @@ void showError(NSWindow* window, NSString* message) {
     NSTableView* _files;
     NSPopUpButton* _action;
     NSPopUpButton* _format;
+    NSTextField* _formatLabel;
     NSTextField *_videoQuality, *_imageQuality, *_videoWidth, *_imageWidth, *_fps, *_target;
     NSTextField *_pattern, *_start, *_prefix, *_suffix, *_find, *_replacement, *_output;
     NSButton *_mute, *_firstFrame;
@@ -239,6 +241,7 @@ void showError(NSWindow* window, NSString* message) {
         caption.preferredMaxLayoutWidth = 195;
         [rows addObject:@[caption, field]];
         [field setAccessibilityLabel:label(key)];
+        return caption;
     };
     auto spanningRow = [&](NSView* view) {
         [rows addObject:@[view, NSGridCell.emptyContentView]];
@@ -255,7 +258,7 @@ void showError(NSWindow* window, NSString* message) {
     _videoRows = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(begin, rows.count - begin)];
 
     _formatRow = rows.count;
-    addRow("format", _format);
+    _formatLabel = addRow("format", _format);
     begin = rows.count;
     addRow("width", _imageWidth);
     addRow("imageQuality", _imageQuality);
@@ -329,6 +332,14 @@ void showError(NSWindow* window, NSString* message) {
 }
 
 - (void)resetRows {
+    if (_options.action == ca::Action::more && !_options.files.empty() &&
+        ca::accepts(ca::Action::repack, _options.files)) {
+        const auto selected = std::find(_actions.begin(), _actions.end(), ca::Action::repack);
+        if (selected != _actions.end()) {
+            _options.action = *selected;
+            [_action selectItemAtIndex:(selected - _actions.begin()) + 1];
+        }
+    }
     _preview.clear();
     _statuses.assign(_options.files.size(), ca::tr("ready"));
     _outputs.assign(_options.files.size(), {});
@@ -344,11 +355,16 @@ void showError(NSWindow* window, NSString* message) {
     const bool image = action == ca::Action::image;
     const bool rename = action == ca::Action::rename;
     const bool chosen = action != ca::Action::more;
-    if (action != _formatAction) {
+    auto formats = ca::outputFormats(action, _options.files);
+    if (action != _formatAction || formats != _formats) {
         if (NSString* previous = _format.titleOfSelectedItem) _formatSelections[_formatAction] = value(previous);
         _formatAction = action;
+        _formats = std::move(formats);
+        NSString* caption = label(action == ca::Action::repack ? "archiveFormat" : "format");
+        _formatLabel.stringValue = caption;
+        [_format setAccessibilityLabel:caption];
         [_format removeAllItems];
-        for (const auto& format : ca::outputFormats(action)) [_format addItemWithTitle:text(format)];
+        for (const auto& format : _formats) [_format addItemWithTitle:text(format)];
         if (_format.numberOfItems > 0) {
             [_format selectItemAtIndex:0];
             const auto preferred = _formatSelections.find(action);

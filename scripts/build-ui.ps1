@@ -90,15 +90,16 @@ try {
     if ($sdkTools.Count -ne 1) { throw 'Expected one x64 metadata tool directory in the SDK archive.' }
     $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
     if (-not (Test-Path -LiteralPath $cmake)) { $cmake = (Get-Command cmake -ErrorAction Stop).Source }
-    & $cmake --preset windows-x64
+    & $cmake --preset windows-x64 "-DCONTEXT_ACTIONS_OFFLINE=$([bool]$Offline)"
     if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
-    & $cmake --build --preset release --target actions_core
+    & $cmake --build --preset release --target actions_core ContextActionsArchive
     if ($LASTEXITCODE -ne 0) { throw 'Core build failed.' }
     # C++/WinRT invokes mdmerge by name in cmd.exe, whose PATH is limited to 8191 characters.
     $env:PATH = "$($sdkTools[0]);$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
     $env:NoDefaultCurrentDirectoryInExePath = '1'
     & (Join-Path $vs 'MSBuild\Current\Bin\MSBuild.exe') 'src\ui\ContextActions.vcxproj' /p:Configuration=Release /p:Platform=x64 /m:2 /v:quiet /nologo /nodeReuse:false '/flp:logfile=build/winui-build.log;verbosity=normal'
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build failed. See build\winui-build.log.' }
+    Copy-Item -LiteralPath 'build\Release\ContextActionsArchive.exe' -Destination 'build\winui'
 } finally {
     foreach ($name in $variables) { [Environment]::SetEnvironmentVariable($name,$previous[$name],'Process') }
     Pop-Location

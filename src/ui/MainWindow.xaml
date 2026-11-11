@@ -79,6 +79,7 @@
                     </StackPanel>
                     <ComboBox x:Name="AudioFormatBox" Visibility="Collapsed" AutomationProperties.AutomationId="AudioFormat"/>
                     <ComboBox x:Name="ContainerFormatBox" Visibility="Collapsed" AutomationProperties.AutomationId="ContainerFormat"/>
+                    <ComboBox x:Name="ArchiveFormatBox" Visibility="Collapsed" AutomationProperties.AutomationId="ArchiveFormat"/>
                     <CheckBox x:Name="FirstFrameBox" Visibility="Collapsed" AutomationProperties.AutomationId="FirstFrame"/>
                     <StackPanel x:Name="RenameOptions" Spacing="12" Visibility="Collapsed">
                         <TextBox x:Name="PatternBox" Text="{}{name}_{n}" AutomationProperties.AutomationId="RenamePattern"/>

@@ -65,8 +65,13 @@ run merge --action pdf -- "$image" "$newline_pdf"
 test "$(qpdf --show-npages "$work/Кадр & 100%_pdf (2).pdf")" = 2
 
 printf '%s\n' 'Batch rename test' > "$document"
+tar -cf "$work/repack-source.tar" -C "$work" "$(basename "$document")"
+run repack --action repack --format tar.gz -- "$work/repack-source.tar"
+test -s "$work/repack-source.tar"
+test "$(tar -xOzf "$work/repack-source.tar.gz" "$(basename "$document")")" = 'Batch rename test'
+
 run rename --action rename --pattern '{name}_{n}' -- "$document"
 test ! -e "$document"
 test -s "$work/Notes & 100%_1.txt"
 
-echo "Headless video, audio, remux, frame, media info, image, PDF and rename checks passed. Reports are in $work"
+echo "Headless video, audio, remux, frame, media info, image, PDF, archive repack and rename checks passed. Reports are in $work"

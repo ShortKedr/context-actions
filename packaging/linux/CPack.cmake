@@ -24,8 +24,12 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_LIST_DIR}/preinst")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
 
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
-set(CPACK_RPM_PACKAGE_LICENSE "MIT")
-set(CPACK_RPM_USER_FILELIST "%license /usr/share/doc/context-actions/LICENSE")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT AND BSD-2-Clause AND BSD-3-Clause AND CC0-1.0 AND ISC AND Zlib AND 0BSD")
+set(CPACK_RPM_USER_FILELIST
+    "%license /usr/share/doc/context-actions/LICENSE"
+    "%license /usr/share/doc/context-actions/licenses/archive/libarchive.txt"
+    "%license /usr/share/doc/context-actions/licenses/archive/zlib.txt"
+    "%license /usr/share/doc/context-actions/licenses/archive/liblzma.txt")
 set(CPACK_RPM_PACKAGE_REQUIRES "gtk4 >= 4.6, ffmpeg, qpdf, nautilus-python")
 set(CPACK_RPM_PACKAGE_REQUIRES_PRE "rpm >= 4.16")
 set(CPACK_RPM_PACKAGE_SUGGESTS "libreoffice-writer, libreoffice-calc")

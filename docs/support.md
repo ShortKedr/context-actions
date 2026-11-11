@@ -14,6 +14,7 @@ Context Actions supports Windows 11 x64, macOS 11+ on Intel and Apple Silicon, a
 | Save first video frame | Supported videos | PNG | Saves the first video frame. Embedded cover art is skipped. |
 | Media information | Supported videos, audio, and images | Text report per file | Lists the container, duration and available stream details, such as codecs, dimensions, frame rate and audio channels. Open the report from the results. |
 | Convert or resize images | JPEG (`.jpg`, `.jpeg`), PNG, WebP, BMP, TIFF (`.tif`, `.tiff`), GIF | JPEG (`.jpg`), PNG, WebP, BMP, TIFF (`.tiff`), GIF | Each input can be converted to any listed output. Each result is a still image. For GIF, TIFF, and WebP inputs, enable the first-frame or first-page option. |
+| Repack archive | ZIP, TAR, TAR.GZ (`.tar.gz`, `.tgz`), 7Z, RAR (RAR4 and RAR5) | ZIP, TAR.GZ, 7Z | One new archive per source. The selected target must differ from the format of every source. A `.tgz` source counts as TAR.GZ. |
 | Create or merge PDFs | PDF and any of the supported image inputs above, in any combination | One PDF | The input list sets the page order. Each source PDF contributes all its pages at their original sizes. Images become JPEGs on A4 pages with 24 pt margins and automatic orientation. The first-frame or first-page option applies to GIF, TIFF, and WebP inputs. Forms, signatures, bookmarks, and document structure are outside the supported merge behavior. A PDF that requires a password causes the merge to fail. If an input fails, the combined PDF is withheld. |
 | Export documents to PDF | DOCX, DOC, ODT, RTF, TXT | PDF | Uses installed Microsoft Word on Windows or LibreOffice Writer on macOS and Linux. Password-protected documents are unsupported. Layout depends on the Office backend and installed fonts. |
 | Export spreadsheets to PDF | XLSX, XLS, ODS, CSV | PDF | Uses installed Microsoft Excel on Windows or LibreOffice Calc on macOS and Linux. The Office backend determines print areas and pagination. Sheet selection and print configuration are outside the 0.1 feature set. |
@@ -25,6 +26,10 @@ Image resizing preserves the aspect ratio and only scales down. The quality sett
 On Windows, Word and Excel exports use separate automation sessions. Files open read-only with macros, link updates, and recent-file tracking disabled. Availability is cached separately in `%LOCALAPPDATA%\Context Actions\capabilities.ini` after an attempt to start the respective app. **Check again (Office)** clears that cache. Cancel waits for an in-flight Office call to return. On macOS and Linux, LibreOffice exports run headless with a separate temporary user profile for each file. Cancel stops the conversion process.
 
 Standalone format conversion for documents and spreadsheets is planned. The catalog shows those actions with their availability status.
+
+Archive repacking supports single-volume, unencrypted archives containing regular files and directories. It preserves file contents and nested paths. Modification times and permission bits are subject to the destination format. Standard ZIP Store/Deflate and 7Z LZMA/LZMA2 are supported. The bundled engine rejects solid RAR4, RAR5 with dictionaries larger than 64 MiB, and ZIP or 7Z entries compressed with BZip2 or Zstandard. Archives containing unsafe paths, links, or special files also fail.
+
+The output keeps the source base name, for example `backup.tar.gz` becomes `backup.zip`. In a batch, the app offers formats that differ from every input format. For scripted repacking, use `--action repack --format zip|tar.gz|7z` with the desired format.
 
 ## File operations
 

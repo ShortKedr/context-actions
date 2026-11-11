@@ -28,6 +28,8 @@
 
 Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/` по URL из `dependencies.json` и проверяются по SHA-256 перед распаковкой. WinUI-пакеты с nuget.org зафиксированы по версиям в `src/ui/packages.config` и по SHA-256 в `scripts/build-ui.ps1`. Каждая сборка заново распаковывает проверенные пакеты в `.build-tools/nuget/`. Inno Setup используется как переносимый пакет `Tools.InnoSetup`.
 
+При первой конфигурации CMake скачивает исходники libarchive, zlib и liblzma и проверяет их по SHA-256 из `cmake/ArchiveEngine.cmake`. Для сборки Windows с `-Offline` сохраните эти три архива в `build/archive-upstream/`. Собранный движок входит в дистрибутив и доступен при работе приложения без сети.
+
 Пайплайн: CMake/MSVC Release (ядро, shell-DLL, тестовый EXE) → MSBuild native XAML → CTest → короткий headless-тест приложения → MakeAppx sparse identity → Inno Setup LZMA2 → отчёт и SHA-256. `-SkipTests` пропускает CTest и headless-тест. В GitHub Actions дополнительно запускается установщик, проверяется установленное приложение и выполняется удаление. UI, Office и регистрация в Explorer проверяются отдельно.
 
 Для отдельной проверки интерфейса запустите `./scripts/ui-smoke-test.ps1 -AppPath ./dist/ContextActions/ContextActions.exe` в интерактивном сеансе Windows. Скрипт открывает приложение и проверяет выбор файлов, переименование и отмену, переходы между режимами окна, валидацию и диагностику ошибок.

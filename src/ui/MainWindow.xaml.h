@@ -25,6 +25,7 @@ private:
     void RefreshFiles(bool reset=true);
     void RefreshActions(bool selectBest);
     void ActionChanged();
+    void RefreshArchiveFormats(std::wstring const& preferred);
     Microsoft::UI::Xaml::Controls::ComboBox FormatPicker(ca::Action action);
     void ReadOptions();
     void ValidateOptions();
