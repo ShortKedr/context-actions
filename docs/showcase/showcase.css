@@ -1,0 +1,211 @@
+:root {
+  color-scheme: light;
+  font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  color: #252136;
+  background: #f7f5fb;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; }
+
+main {
+  width: min(1280px, calc(100% - 64px));
+  margin: 0 auto;
+  padding-bottom: 44px;
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 72px;
+  border-bottom: 1px solid #dcd7e7;
+  color: #58516d;
+  font-size: 0.875rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #252136;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.intro { margin: 36px 0 24px; }
+
+h1 {
+  max-width: 840px;
+  margin: 0;
+  font-size: clamp(2.3rem, 5.5vw, 4.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.intro p {
+  max-width: 64ch;
+  margin: 16px 0 0;
+  color: #58516d;
+  line-height: 1.55;
+}
+
+.player {
+  overflow: hidden;
+  color: #f9f6ff;
+  background: #201935;
+  border-radius: 22px;
+  box-shadow: 0 20px 55px -28px #37225688;
+}
+
+.stage {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: 37% minmax(0, 1fr);
+  align-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 75% 47%, #635187 0%, transparent 52%),
+    linear-gradient(125deg, #171426, #271b3c 62%, #36204b);
+}
+
+.scene-copy {
+  padding-left: 5.5cqw;
+  opacity: var(--scene-opacity, 1);
+  transform: translateY(var(--scene-shift, 0));
+}
+
+.eyebrow {
+  color: #eeb5fb;
+  font-size: clamp(0.6rem, 1.15cqw, 0.95rem);
+  font-weight: 700;
+  letter-spacing: 0.17em;
+}
+
+.scene-copy h2 {
+  margin: 1.6cqw 0;
+  font-size: clamp(1.2rem, 4.4cqw, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.scene-copy p {
+  margin: 0;
+  color: #e3d9f2;
+  font-size: clamp(0.75rem, 1.75cqw, 1.5rem);
+  line-height: 1.43;
+}
+
+.scene-visual {
+  position: relative;
+  height: 47cqw;
+  margin: 0 4.5cqw 0 3cqw;
+  opacity: var(--scene-opacity, 1);
+  transform: translateX(var(--scene-shift, 0));
+}
+
+.scene-visual img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 20px #100922aa);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #ffffff26;
+}
+
+button {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid #9b5bd8;
+  outline-offset: 3px;
+}
+
+.play {
+  flex: 0 0 5rem;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #221633;
+  background: #f0c6fb;
+}
+
+.play:hover { background: #f7dbff; }
+
+#position {
+  flex: 1;
+  min-width: 0;
+  accent-color: #eeb5fb;
+  cursor: pointer;
+}
+
+#time { color: #eadff7; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.chapters, .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.chapters button {
+  padding: 8px 13px;
+  border: 1px solid #dcd7e7;
+  border-radius: 20px;
+  color: #453b59;
+  background: #fff;
+}
+
+.chapters button:hover { background: #f0e6fa; }
+.chapters button[aria-current] { color: #fff; background: #4a316c; border-color: #4a316c; }
+.links { gap: 20px; font-size: 0.9rem; }
+.links a, noscript a { color: #56347a; text-underline-offset: 3px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  main { width: calc(100% - 32px); }
+  .masthead { min-height: 60px; }
+  .intro { margin-top: 26px; }
+  .player { border-radius: 14px; }
+
+  .stage {
+    grid-template-columns: 1fr;
+    grid-template-rows: 42cqw 1fr;
+    aspect-ratio: 5 / 6;
+    padding: 0 5cqw;
+  }
+
+  .scene-copy { padding-left: 0; }
+  .scene-copy h2 { font-size: clamp(1.3rem, 7cqw, 2.25rem); }
+  .scene-copy p { font-size: clamp(0.75rem, 3.7cqw, 1rem); }
+  .scene-visual { height: 70cqw; margin: 0; align-self: start; }
+  .controls { gap: 8px; padding: 12px; }
+  .play { flex-basis: 4rem; }
+}
