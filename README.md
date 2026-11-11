@@ -2,9 +2,9 @@
 
 Compress videos, resize images, combine scans into a PDF, and rename files in batches with a native Windows 11 x64 app. Start with a right-click in File Explorer or open the full workspace to build a file list.
 
-![Animated walkthrough of selecting Convert to MP4 / H.264 in File Explorer and running the conversion through to completion](docs/showcase/demo.gif)
+[![Watch the 10-second walkthrough of converting a video to MP4 in Context Actions](docs/showcase/demo.gif)](docs/showcase/demo.mp4)
 
-[Watch the 10-second MP4](docs/showcase/demo.mp4) · [Open the interactive HTML tour](docs/showcase/index.html) in a browser from your local checkout.
+[Open the interactive HTML tour](docs/showcase/index.html) in a browser from your local checkout. It recreates the File Explorer and WinUI 3 preview screens with a sample file.
 
 ## What you can do
 
@@ -18,13 +18,7 @@ See the [format-to-format conversion table](docs/support.md#format-conversions) 
 
 Choose an action in File Explorer to open its compact window, or choose **More Actions…** for the full workspace. Add files through the picker, drag-and-drop, or command-line arguments. Batches show per-file results and can be canceled. Conversions keep the originals and use unique output names. Scripts can run actions with `--headless` and `--report`.
 
-## Screens
-
-| File Explorer right-click menu | Processing window |
-| --- | --- |
-| ![Context Actions submenu with Convert to MP4 / H.264 highlighted](docs/showcase/explorer.jpg) | ![Completed conversion with Open result and Show in folder links](docs/showcase/video.jpg) |
-
-The tour and stills recreate the File Explorer and WinUI 3 preview screens with sample files. The app and its Explorer menu support English, Russian, German, French, and Simplified Chinese. The interface offers theme controls and a way to check Office availability again.
+The app and its Explorer menu support English, Russian, German, French, and Simplified Chinese. The interface offers theme controls and a way to check Office availability again.
 
 ## Build the preview
 
