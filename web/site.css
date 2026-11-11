@@ -266,8 +266,8 @@ h2 { font-size: clamp(2.1rem, 3.6vw, 3.55rem); margin-block: 12px 20px; }
 .walkthrough-copy > p:not(.eyebrow) { max-width: 38ch; }
 .steps { display: grid; gap: 9px; margin: 20px 0 0; padding-left: 1.4em; font-size: .94rem; }
 .steps li::marker { color: var(--blue); font-weight: 700; }
-.video-frame { padding: 8px; border: 1px solid var(--control-line); border-radius: 15px; background: var(--band); box-shadow: 0 13px 32px #1839731c; }
-video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 9px; background: #121a2e; }
+.walkthrough-frame { padding: 8px; border: 1px solid var(--control-line); border-radius: 15px; background: var(--band); box-shadow: 0 13px 32px #1839731c; }
+.walkthrough-frame iframe { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 0; border-radius: 9px; background: #171522; }
 
 .get-started { padding-block: 61px; background: #132857; color: #fff; }
 .build-layout { display: grid; grid-template-columns: 1.12fr .88fr; align-items: center; gap: clamp(24px, 6vw, 90px); }

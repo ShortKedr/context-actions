@@ -1,5 +1,6 @@
 "use strict";
 
+const embedded = new URLSearchParams(location.search).has("embed");
 const stage = document.querySelector(".stage");
 const title = document.querySelector("#scene-title");
 const summary = document.querySelector("#scene-summary");
@@ -87,6 +88,8 @@ function showTime(seconds) {
   stage.style.setProperty("--offset", `-${currentTime}s`);
   stage.style.setProperty("--progress", `${progress * 100}%`);
 
+  if (embedded) return;
+
   position.value = currentTime;
   const clock = formatTime(currentTime);
   const total = formatTime(duration);
@@ -109,8 +112,9 @@ function pause() {
 }
 
 function tick(now) {
-  showTime((now - startTime) / 1000);
-  if (currentTime < duration) {
+  const elapsed = (now - startTime) / 1000;
+  showTime(embedded ? elapsed % duration : elapsed);
+  if (embedded || currentTime < duration) {
     frame = requestAnimationFrame(tick);
   } else {
     pause();
@@ -144,5 +148,11 @@ chapters.forEach(chapter => chapter.addEventListener("click", () => {
 }));
 
 showTime(0);
-document.querySelector(".controls").hidden = false;
-document.querySelector(".chapters").hidden = false;
+if (embedded) {
+  document.documentElement.classList.add("embedded");
+  startTime = performance.now();
+  frame = requestAnimationFrame(tick);
+} else {
+  document.querySelector(".controls").hidden = false;
+  document.querySelector(".chapters").hidden = false;
+}

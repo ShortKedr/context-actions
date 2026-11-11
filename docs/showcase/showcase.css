@@ -445,15 +445,20 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   white-space: nowrap;
 }
 
+:root.embedded { background: #171522; }
+.embedded main { width: 100%; padding: 0; }
+.embedded :is(.masthead, .links) { display: none; }
+.embedded .player { border-radius: 0; box-shadow: none; }
+
 @media (max-width: 720px) {
   main { width: calc(100% - 32px); }
   .masthead { min-height: 60px; }
   .player { border-radius: 14px; }
-  .stage { grid-template-columns: 1fr; grid-template-rows: 41cqw auto; aspect-ratio: auto; }
-  .scene-copy { padding: 6cqw 7cqw 0; }
-  .scene-copy h1 { font-size: 8cqw; text-wrap: wrap; }
-  .scene-copy p { max-width: 42ch; margin-top: 2.6cqw; font-size: 3.75cqw; }
-  .visual { --u: 1.85cqw; margin: 0 1cqw; }
+  :root:not(.embedded) .stage { grid-template-columns: 1fr; grid-template-rows: 41cqw auto; aspect-ratio: auto; }
+  :root:not(.embedded) .scene-copy { padding: 6cqw 7cqw 0; }
+  :root:not(.embedded) .scene-copy h1 { font-size: 8cqw; text-wrap: wrap; }
+  :root:not(.embedded) .scene-copy p { max-width: 42ch; margin-top: 2.6cqw; font-size: 3.75cqw; }
+  :root:not(.embedded) .visual { --u: 1.85cqw; margin: 0 1cqw; }
   .controls { gap: 8px; padding: 12px; }
   .play { flex-basis: 4.25rem; }
 }
