@@ -33,6 +33,15 @@
   --focus: #ffad76;
 }
 
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(root) {
+  animation-duration: 320ms;
+  animation-timing-function: ease-in-out;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; line-height: 1.55; }
 a { color: inherit; }
