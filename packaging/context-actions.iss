@@ -36,7 +36,7 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Tasks]
-Name: "shell"; Description: "File Explorer context menus (preview; unsigned package)"; Flags: unchecked
+Name: "shell"; Description: "File Explorer context menus (local preview; requires Developer Mode already enabled)"; Flags: unchecked
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -46,10 +46,12 @@ Name: "{autoprograms}\Context Actions"; Filename: "{app}\ContextActions.exe"
 
 [Code]
 function ShellRegistration(const Mode: String): Boolean;
-var Code: Integer;
+var Code: Integer; Arguments: String;
 begin
+  Arguments := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\register-shell.ps1') + '" -Mode ' + Mode;
+  if Mode = 'Install' then Arguments := Arguments + ' -Development';
   Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\register-shell.ps1') + '" -Mode ' + Mode,
+    Arguments,
     ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
@@ -57,7 +59,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('shell') then begin
     if not ShellRegistration('Install') then
-      MsgBox('Context Actions was installed, but Explorer registration failed. See docs\build.md for the manual registration command. The preview package is unsigned and may require elevation or a signed package under your Windows policy.', mbError, MB_OK);
+      MsgBox('Context Actions was installed, but Explorer registration failed. The local preview requires Developer Mode to be enabled beforehand. No Windows security settings were changed. See docs\build.md for registration details.', mbError, MB_OK);
   end;
 end;
 

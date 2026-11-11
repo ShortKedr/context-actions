@@ -22,6 +22,9 @@ function App([string]$Action,[string]$Folder,[string[]]$Files,[string[]]$Options
     return @(Get-ChildItem -LiteralPath $output -File -ErrorAction SilentlyContinue)
 }
 try {
+    $decoders = & $ffmpeg -hide_banner -decoders
+    Check ($LASTEXITCODE -eq 0) 'Cannot list bundled FFmpeg decoders'
+    Check ([bool]($decoders -match '^\s*V\S*\s+libdav1d\s')) 'Bundled FFmpeg requires libdav1d to decode NVIDIA AV1 recordings'
     $video = Join-Path $testDirectory 'Кино & 100% ! (test).mp4'
     Native $ffmpeg @('-v','error','-f','lavfi','-i','testsrc2=size=160x90:rate=15','-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','1','-c:v','libx264','-c:a','aac',$video)
     $sourceHash = (Get-FileHash -LiteralPath $video).Hash

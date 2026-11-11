@@ -1,4 +1,4 @@
-#include "core.h"
+#include "windows/platform_win.h"
 #include <shobjidl.h>
 #include <shlwapi.h>
 #include <wrl/implements.h>
@@ -57,7 +57,6 @@ public:
             ca::Options options;options.action=action;options.files=selection(items);if(options.files.empty())return E_INVALIDARG;
             if(!ca::accepts(action,options.files))return E_INVALIDARG;
             auto job=ca::writeJob(options);std::vector<std::wstring> args{L"--job",job.wstring()};
-            if(action==ca::Action::compress||action==ca::Action::h264||action==ca::Action::h265)args.push_back(L"--run");
             try{ca::launch(directory()/L"ContextActions.exe",args);}catch(...){ca::consumeJob(job);throw;}
             return S_OK;
         }catch(...){return E_FAIL;}

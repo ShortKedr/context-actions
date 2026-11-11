@@ -1,4 +1,4 @@
-#include "core.h"
+#include "windows/platform_win.h"
 #include <commctrl.h>
 #include <dwmapi.h>
 #include <shlobj.h>

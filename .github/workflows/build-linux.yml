@@ -1,0 +1,73 @@
+name: Linux build
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install GTK, media and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build libgtk-4-dev ffmpeg qpdf desktop-file-utils dpkg-dev rpm cpio
+      - name: Build and test
+        run: |
+          cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/linux
+          ctest --test-dir build/linux --output-on-failure
+          bash scripts/smoke-test-posix.sh build/linux/src/linux/context-actions build/linux
+      - name: Build archive, DEB and RPM
+        run: |
+          cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
+      - name: Verify packages
+        env:
+          DEB_ARCH: ${{ matrix.arch }}
+        run: |
+          (cd dist/linux && sha256sum -c ./*.sha256)
+          mkdir -p build/linux/archive-check
+          tar -xzf dist/linux/*.tar.gz --strip-components=1 -C build/linux/archive-check
+          build/linux/archive-check/usr/bin/context-actions --help
+          test "$(dpkg-deb --field dist/linux/*.deb Architecture)" = "$DEB_ARCH"
+          sudo apt-get install -y --no-install-recommends "$PWD"/dist/linux/*.deb
+          /usr/bin/context-actions --help
+          desktop-file-validate /usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+          test "$(rpm -qp --queryformat '%{ARCH}' dist/linux/*.rpm)" = "$(uname -m)"
+          rpm -qp --requires dist/linux/*.rpm
+          mkdir -p build/linux/rpm-check
+          rpm2cpio dist/linux/*.rpm | (cd build/linux/rpm-check && cpio -id)
+          build/linux/rpm-check/usr/bin/context-actions --help
+          desktop-file-validate build/linux/rpm-check/usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ContextActions-linux-${{ matrix.arch }}-app
+          path: |
+            dist/linux/*.tar.gz
+            dist/linux/*.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ContextActions-linux-${{ matrix.arch }}-installers
+          path: |
+            dist/linux/*.deb
+            dist/linux/*.rpm
+            dist/linux/*.deb.sha256
+            dist/linux/*.rpm.sha256
+          compression-level: 0
+          if-no-files-found: error

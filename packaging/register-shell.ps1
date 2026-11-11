@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('Install','Uninstall')][string]$Mode = 'Install')
+param([ValidateSet('Install','Uninstall')][string]$Mode = 'Install', [switch]$Development)
 $ErrorActionPreference = 'Stop'
 $appDirectory = Split-Path -Parent $PSScriptRoot
 $clsid = '{A836FB4F-6548-4FC3-8D67-50267B25A418}'
@@ -11,7 +11,13 @@ try {
         foreach ($file in @('ContextActions.exe','ContextActionsShell.dll','packaging\ContextActions.msix')) {
             if (-not (Test-Path -LiteralPath (Join-Path $appDirectory $file) -PathType Leaf)) { throw "Missing package file: $file" }
         }
-        Add-AppxPackage -Path (Join-Path $PSScriptRoot 'ContextActions.msix') -ExternalLocation $appDirectory -AllowUnsigned
+        if ($Development) {
+            $developerMode = Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
+            if ($developerMode -ne 1) { throw 'Development registration requires Developer Mode to be enabled beforehand. This script does not change that setting.' }
+            Add-AppxPackage -Register (Join-Path $PSScriptRoot 'development\AppxManifest.xml') -ExternalLocation $appDirectory
+        } else {
+            Add-AppxPackage -Path (Join-Path $PSScriptRoot 'ContextActions.msix') -ExternalLocation $appDirectory
+        }
         $server = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("$comKey\InprocServer32")
         try { $server.SetValue('', (Join-Path $appDirectory 'ContextActionsShell.dll')); $server.SetValue('ThreadingModel','Apartment') } finally { $server.Dispose() }
         $menu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($menuKey)
@@ -26,6 +32,6 @@ try {
         Get-AppxPackage -Name 'ContextActions.Preview' | Remove-AppxPackage
     }
 } catch {
-    Write-Error "Context Actions shell $Mode failed: $($_.Exception.Message). The preview identity is unsigned; Windows policy or elevation may be required. No Explorer restart was attempted." -ErrorAction Continue
+    Write-Error "Context Actions shell $Mode failed: $($_.Exception.Message). Normal installation requires a trusted signed identity package. For local preview testing with Developer Mode already enabled, use -Development. No Explorer restart was attempted." -ErrorAction Continue
     exit 1
 }

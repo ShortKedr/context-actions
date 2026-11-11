@@ -4,9 +4,9 @@
   "toolchain": {"generator": "Visual Studio 17 2022", "toolset": "v143", "sdk": "10.0.22621.0", "cmakeMinimum": "3.25"},
   "ffmpeg": {
     "version": "8.0.1",
-    "url": "https://github.com/GyanD/codexffmpeg/releases/download/8.0.1/ffmpeg-8.0.1-essentials_build.zip",
-    "sha256": "e2aaeaa0fdbc397d4794828086424d4aaa2102cef1fb6874f6ffd29c0b88b673",
-    "root": "ffmpeg-8.0.1-essentials_build",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/8.0.1/ffmpeg-8.0.1-full_build.zip",
+    "sha256": "467cde100a47ed4b03a897988aeb4a296890c1e2b2d2864204657d002bc5fb90",
+    "root": "ffmpeg-8.0.1-full_build",
     "license": "GPL-3.0-or-later"
   },
   "qpdf": {

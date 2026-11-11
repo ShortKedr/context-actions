@@ -1,18 +1,12 @@
-#include "core.h"
-#include <wincodec.h>
+#include "platform.h"
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 
 namespace ca {
-void createImagePdf(const fs::path& image, const fs::path& output) {
-    ComPtr<IWICImagingFactory> factory;
-    check(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)));
-    ComPtr<IWICBitmapDecoder> decoder;
-    check(factory->CreateDecoderFromFilename(image.c_str(),nullptr,GENERIC_READ,WICDecodeMetadataCacheOnDemand,&decoder));
-    ComPtr<IWICBitmapFrameDecode> frame;check(decoder->GetFrame(0,&frame));
-    UINT width=0,height=0;check(frame->GetSize(&width,&height));
-    if(!width||!height)throw std::runtime_error("Empty image");
+void createImagePdf(const fs::path& image, const fs::path& output, int width, int height) {
+    if (width <= 0 || height <= 0) throw std::runtime_error("Empty image");
     // One JPEG XObject per page; qpdf handles page assembly. No fonts or text renderer needed.
     const double pageW=width>height?842:595,pageH=width>height?595:842;
     const double scale=std::min((pageW-48)/width,(pageH-48)/height),w=width*scale,h=height*scale;

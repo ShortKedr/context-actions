@@ -7,4 +7,4 @@ See docs/support.md for supported conversions and limitations.
 The package includes unmodified FFmpeg (GPLv3) and qpdf (Apache-2.0)
 binaries and their accompanying notices under licenses/.
 Third-party components retain their respective licenses and copyrights.
-No license for the Context Actions source code is granted by this notice.
+Context Actions source code is licensed under MIT. See docs/LICENSE.

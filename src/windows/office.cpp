@@ -1,4 +1,4 @@
-#include "core.h"
+#include "windows/platform_win.h"
 #include <algorithm>
 #include <comdef.h>
 
@@ -48,6 +48,8 @@ Capability officeCapability(bool excel) {
     int value=GetPrivateProfileIntW(L"office",officeKey(excel),0,(dataDirectory()/L"capabilities.ini").c_str());
     return value==1?Capability::available:value==2?Capability::unavailable:Capability::unknown;
 }
+std::wstring officeUnavailableReason(bool excel) { return tr(excel ? "needExcel" : "needWord"); }
+const char* officeActionKey(bool excel) { return excel ? "excel" : "word"; }
 void setOfficeCapability(bool excel,Capability state) {
     fs::create_directories(dataDirectory());
     if(!WritePrivateProfileStringW(L"office",officeKey(excel),std::to_wstring(static_cast<int>(state)).c_str(),(dataDirectory()/L"capabilities.ini").c_str()))

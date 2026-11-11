@@ -1,0 +1,67 @@
+name: macOS universal build
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install media tools
+        run: |
+          brew install ffmpeg-full qpdf
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
+      - name: Build and test a universal app
+        run: |
+          cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES='arm64;x86_64' -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build/macos
+          ctest --test-dir build/macos --output-on-failure
+          bash scripts/smoke-test-posix.sh build/macos/ContextActions.app/Contents/MacOS/ContextActions build/macos
+      - name: Build app archive and installer
+        run: bash packaging/macos/package.sh build/macos dist/macos
+      - name: Verify app archive and install package
+        run: |
+          (cd dist/macos && shasum -a 256 -c ./*.sha256)
+          ditto -x -k dist/macos/*.zip build/macos/archive-check
+          app=build/macos/archive-check/ContextActions.app
+          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/ContextActions"
+          codesign --verify --strict --all-architectures "$app"
+          sudo installer -pkg dist/macos/*.pkg -target /
+          /Applications/ContextActions.app/Contents/MacOS/ContextActions --help
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ContextActions-macos-universal-app
+          path: |
+            dist/macos/*.zip
+            dist/macos/*.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ContextActions-macos-universal-installer
+          path: |
+            dist/macos/*.pkg
+            dist/macos/*.pkg.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+  verify-intel:
+    needs: build
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ContextActions-macos-universal-installer
+          path: dist/macos
+      - name: Install and run the Intel slice
+        run: |
+          (cd dist/macos && shasum -a 256 -c ./*.sha256)
+          sudo installer -pkg dist/macos/*.pkg -target /
+          /Applications/ContextActions.app/Contents/MacOS/ContextActions --help

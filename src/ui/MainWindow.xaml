@@ -1,0 +1,129 @@
+<Window x:Class="ContextActions.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Context Actions">
+    <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
+    <Grid x:Name="Root" AllowDrop="True">
+        <Grid.Resources>
+            <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+            <Style TargetType="ComboBox"><Setter Property="HorizontalAlignment" Value="Stretch"/></Style>
+            <Style TargetType="TextBox"><Setter Property="HorizontalAlignment" Value="Stretch"/></Style>
+            <Style TargetType="NumberBox">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="SpinButtonPlacementMode" Value="Compact"/>
+                <Setter Property="SmallChange" Value="1"/>
+            </Style>
+        </Grid.Resources>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <TitleBar x:Name="AppTitleBar" Title="Context Actions" AutomationProperties.AutomationId="AppTitleBar">
+            <TitleBar.IconSource><FontIconSource Glyph="&#xE8B7;"/></TitleBar.IconSource>
+            <TitleBar.RightHeader>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button x:Name="ExpandButton" Visibility="Collapsed" Style="{ThemeResource SubtleButtonStyle}" AutomationProperties.AutomationId="ExpandWorkspace"><FontIcon Glyph="&#xE740;" FontSize="16"/></Button>
+                    <Button x:Name="SettingsButton" Style="{ThemeResource SubtleButtonStyle}" AutomationProperties.AutomationId="Settings"><FontIcon Glyph="&#xE713;" FontSize="16"/></Button>
+                </StackPanel>
+            </TitleBar.RightHeader>
+        </TitleBar>
+        <StackPanel Grid.Row="1" Padding="24,8,24,20" Spacing="4">
+            <TextBlock x:Name="Heading" Text="Context Actions" Style="{ThemeResource TitleTextBlockStyle}"/>
+            <TextBlock x:Name="Subtitle" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
+        <ScrollViewer x:Name="BodyScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid x:Name="Workspace" Padding="24,0,24,24" ColumnSpacing="20" RowSpacing="20">
+                <Grid.ColumnDefinitions><ColumnDefinition x:Name="FilesColumn" Width="*"/><ColumnDefinition x:Name="OptionsColumn" Width="360"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid x:Name="FilesPane" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16" RowSpacing="12">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="FilesHeading" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+                        <Button x:Name="AddButton" Grid.Column="1" AutomationProperties.AutomationId="AddFiles"/>
+                    </Grid>
+                    <StackPanel x:Name="EmptyState" Grid.Row="1" Spacing="12" Padding="16,40" HorizontalAlignment="Center">
+                        <FontIcon Glyph="&#xE8B7;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="DropTitle" Style="{ThemeResource SubtitleTextBlockStyle}" TextAlignment="Center"/>
+                        <TextBlock x:Name="DropHint" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" MaxWidth="280"/>
+                    </StackPanel>
+                    <ListView x:Name="FileList" Grid.Row="1" SelectionMode="Multiple" HorizontalContentAlignment="Stretch" MinHeight="64" MaxHeight="440" AutomationProperties.AutomationId="Files"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="RemoveButton" AutomationProperties.AutomationId="RemoveFiles"><FontIcon Glyph="&#xE74D;" FontSize="16"/></Button>
+                        <Button x:Name="UpButton" AutomationProperties.AutomationId="MoveUp"><FontIcon Glyph="&#xE74A;" FontSize="16"/></Button>
+                        <Button x:Name="DownButton" AutomationProperties.AutomationId="MoveDown"><FontIcon Glyph="&#xE74B;" FontSize="16"/></Button>
+                    </StackPanel>
+                </Grid>
+                <ContentControl x:Name="OperationPane" Grid.Column="1" IsTabStop="False" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="16">
+                    <StackPanel x:Name="ActionSelectors" Spacing="12">
+                        <ComboBox x:Name="CategoryBox" AutomationProperties.AutomationId="Category"/>
+                        <ComboBox x:Name="ActionBox" AutomationProperties.AutomationId="Action"/>
+                    </StackPanel>
+                    <InfoBar x:Name="Availability" IsClosable="False" Severity="Informational"/>
+                    <StackPanel x:Name="VideoOptions" Spacing="16">
+                        <ComboBox x:Name="PresetBox" AutomationProperties.AutomationId="QualityPreset"/>
+                        <Expander x:Name="VideoAdvanced" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="16">
+                                <NumberBox x:Name="QualityBox" Minimum="0" Maximum="51" Value="24" AutomationProperties.AutomationId="Quality"/>
+                                <NumberBox x:Name="WidthBox" Minimum="0" Maximum="16384" Value="0" AutomationProperties.AutomationId="Width"/>
+                                <NumberBox x:Name="FpsBox" Minimum="0" Maximum="240" Value="0" AutomationProperties.AutomationId="Fps"/>
+                                <NumberBox x:Name="TargetBox" Minimum="0" Maximum="1048576" Value="0" AutomationProperties.AutomationId="TargetSize"/>
+                                <CheckBox x:Name="MuteBox" AutomationProperties.AutomationId="Mute"/>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                    <StackPanel x:Name="ImageOptions" Spacing="16" Visibility="Collapsed">
+                        <ComboBox x:Name="FormatBox" AutomationProperties.AutomationId="ImageFormat"/>
+                        <NumberBox x:Name="ImageWidthBox" Minimum="0" Maximum="16384" Value="0"/>
+                        <Expander x:Name="ImageAdvanced" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <NumberBox x:Name="ImageQualityBox" Minimum="0" Maximum="51" Value="24"/>
+                        </Expander>
+                    </StackPanel>
+                    <CheckBox x:Name="FirstFrameBox" Visibility="Collapsed" AutomationProperties.AutomationId="FirstFrame"/>
+                    <StackPanel x:Name="RenameOptions" Spacing="12" Visibility="Collapsed">
+                        <TextBox x:Name="PatternBox" Text="{}{name}_{n}" AutomationProperties.AutomationId="RenamePattern"/>
+                        <NumberBox x:Name="StartBox" Minimum="0" Maximum="1000000000" Value="1"/>
+                        <Expander x:Name="RenameAdvanced" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="12">
+                                <TextBox x:Name="PrefixBox"/><TextBox x:Name="SuffixBox"/><TextBox x:Name="FindBox"/><TextBox x:Name="ReplaceBox"/>
+                            </StackPanel>
+                        </Expander>
+                        <Button x:Name="PreviewButton" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="PreviewNames"/>
+                        <Button x:Name="UndoButton" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="UndoRename"/>
+                    </StackPanel>
+                    <StackPanel x:Name="OutputOptions" Spacing="8">
+                        <TextBox x:Name="OutputBox" AutomationProperties.AutomationId="OutputFolder"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="BrowseButton"/><Button x:Name="ResetOutputButton"/></StackPanel>
+                    </StackPanel>
+                    <TextBlock x:Name="Hint" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{ThemeResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+                </ContentControl>
+            </Grid>
+        </ScrollViewer>
+        <ScrollViewer x:Name="SettingsScroll" Grid.Row="2" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+            <StackPanel x:Name="SettingsPane" Padding="24,0,24,24" Spacing="20" MaxWidth="560" HorizontalAlignment="Left">
+                <Button x:Name="BackButton" HorizontalAlignment="Left" AutomationProperties.AutomationId="BackToFiles"/>
+                <ComboBox x:Name="LanguageBox" AutomationProperties.AutomationId="Language"/>
+                <ComboBox x:Name="ThemeBox" AutomationProperties.AutomationId="Theme"/>
+                <Button x:Name="OfficeButton"/>
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Grid.Row="3" Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}" Padding="24,16" RowSpacing="12">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <InfoBar x:Name="MessageBar" IsClosable="True" IsOpen="False" Severity="Error"/>
+            <ProgressBar x:Name="OverallProgress" Grid.Row="1" Minimum="0" Maximum="100" Value="0" Visibility="Collapsed" AutomationProperties.AutomationId="Progress"/>
+            <Grid Grid.Row="2" ColumnSpacing="12" RowSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="FooterButtonsColumn" Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel Spacing="6" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="Status" AutomationProperties.LiveSetting="Polite"/>
+                    <StackPanel x:Name="ResultActions" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="8" Visibility="Collapsed">
+                        <HyperlinkButton x:Name="OpenButton" Padding="0"/><HyperlinkButton x:Name="RevealButton" Padding="0"/>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel x:Name="FooterActions" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Button x:Name="CancelButton" IsEnabled="False" AutomationProperties.AutomationId="Cancel"/>
+                    <Button x:Name="RunButton" Style="{ThemeResource AccentButtonStyle}" MinWidth="100" AutomationProperties.AutomationId="Run"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

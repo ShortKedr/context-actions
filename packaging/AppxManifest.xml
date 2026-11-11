@@ -7,7 +7,7 @@
  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
  IgnorableNamespaces="uap uap10 rescap com desktop4 desktop5">
- <Identity Name="ContextActions.Preview" Publisher="CN=Context Actions, OID.2.25.311729368913984317654407730594956997722=1" Version="0.1.0.0" ProcessorArchitecture="x64"/>
+ <Identity Name="ContextActions.Preview" Publisher="CN=Context Actions" Version="0.1.0.0" ProcessorArchitecture="x64"/>
  <Properties><DisplayName>Context Actions</DisplayName><PublisherDisplayName>Context Actions</PublisherDisplayName><Logo>Assets\logo-44.png</Logo><uap10:AllowExternalContent>true</uap10:AllowExternalContent></Properties>
  <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0"/></Dependencies>
  <Resources><Resource Language="en-US"/><Resource Language="ru-RU"/><Resource Language="de-DE"/><Resource Language="fr-FR"/><Resource Language="zh-CN"/></Resources>

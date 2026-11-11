@@ -1,4 +1,5 @@
-#include "core.h"
+#include "platform.h"
+#include <cstring>
 #include <algorithm>
 #include <mutex>
 
@@ -6,6 +7,31 @@ namespace ca {
 namespace {
 struct Text { const char* key; const wchar_t* values[5]; };
 const Text texts[] = {
+ {"tagline", {L"Everyday file actions, right where you need them.",L"Повседневные действия с файлами — всегда под рукой.",L"Alltägliche Dateiaktionen, direkt zur Hand.",L"Vos actions sur les fichiers, toujours à portée de main.",L"日常文件操作，触手可及。"}},
+ {"filesTitle", {L"Files",L"Файлы",L"Dateien",L"Fichiers",L"文件"}},
+ {"dropTitle", {L"Drop your files here",L"Перетащите сюда файлы",L"Dateien hier ablegen",L"Déposez vos fichiers ici",L"将文件拖到这里"}},
+ {"dropHint", {L"Or add files to choose an action. Your originals are kept when converting.",L"Или добавьте файлы и выберите действие. При конвертации исходники сохраняются.",L"Oder Dateien hinzufügen und eine Aktion wählen. Originale bleiben beim Konvertieren erhalten.",L"Ou ajoutez des fichiers et choisissez une action. La conversion conserve les originaux.",L"也可添加文件后选择操作。转换时保留原始文件。"}},
+ {"saveTo", {L"Save to",L"Сохранить в",L"Speichern unter",L"Enregistrer dans",L"保存到"}},
+ {"sameFolder", {L"Same folder as source",L"Рядом с исходником",L"Ordner der Quelldatei",L"Dossier du fichier source",L"源文件所在文件夹"}},
+ {"advanced", {L"Advanced options",L"Дополнительные параметры",L"Erweiterte Optionen",L"Options avancées",L"高级选项"}},
+ {"errorDetails", {L"Error details",L"Подробности ошибки",L"Fehlerdetails",L"Détails de l’erreur",L"错误详情"}},
+ {"category", {L"Category",L"Категория",L"Kategorie",L"Catégorie",L"类别"}},
+ {"videoCategory", {L"Video",L"Видео",L"Video",L"Vidéo",L"视频"}},
+ {"imageCategory", {L"Images",L"Изображения",L"Bilder",L"Images",L"图像"}},
+ {"pdfCategory", {L"PDF",L"PDF",L"PDF",L"PDF",L"PDF"}},
+ {"renameCategory", {L"Rename",L"Переименование",L"Umbenennen",L"Renommer",L"重命名"}},
+ {"officeCategory", {L"Documents and spreadsheets",L"Документы и таблицы",L"Dokumente und Tabellen",L"Documents et feuilles de calcul",L"文档与电子表格"}},
+ {"qualityPreset", {L"Quality",L"Качество",L"Qualität",L"Qualité",L"质量"}},
+ {"highQuality", {L"High quality",L"Высокое качество",L"Hohe Qualität",L"Haute qualité",L"高质量"}},
+ {"balanced", {L"Balanced",L"Баланс качества и размера",L"Ausgewogen",L"Équilibrée",L"均衡"}},
+ {"smallerFile", {L"Smaller file",L"Меньший размер",L"Kleinere Datei",L"Fichier plus petit",L"更小文件"}},
+ {"custom", {L"Custom",L"Вручную",L"Benutzerdefiniert",L"Personnalisée",L"自定义"}},
+ {"settings", {L"Settings",L"Настройки",L"Einstellungen",L"Paramètres",L"设置"}},
+ {"settingsHint", {L"Make Context Actions feel at home.",L"Настройте Context Actions для себя.",L"Context Actions nach Ihren Wünschen.",L"Adaptez Context Actions à vos préférences.",L"让 Context Actions 更符合您的习惯。"}},
+ {"fullWorkspace", {L"Open full workspace",L"Открыть полное окно",L"Vollständigen Arbeitsbereich öffnen",L"Ouvrir l’espace de travail complet",L"打开完整工作区"}},
+ {"back", {L"Back to files",L"Вернуться к файлам",L"Zurück zu den Dateien",L"Retour aux fichiers",L"返回文件"}},
+ {"succeeded", {L"succeeded",L"успешно",L"erfolgreich",L"réussi(s)",L"成功"}},
+ {"partialFailure", {L"Some files could not be processed. See their status in the file list; successful results remain available.",L"Часть файлов не удалось обработать. Причины указаны в списке; успешные результаты доступны.",L"Einige Dateien konnten nicht verarbeitet werden. Details stehen in der Dateiliste; erfolgreiche Ergebnisse bleiben verfügbar.",L"Certains fichiers n’ont pas pu être traités. Consultez leur état dans la liste ; les résultats réussis restent accessibles.",L"部分文件无法处理。请查看文件列表中的状态；成功的结果仍可使用。"}},
  {"more", {L"More Actions…",L"Другие действия…",L"Weitere Aktionen…",L"Autres actions…",L"更多操作…"}},
  {"compress", {L"Compress video",L"Сжать видео",L"Video komprimieren",L"Compresser la vidéo",L"压缩视频"}},
  {"h264", {L"Convert to MP4 / H.264",L"Конвертировать в MP4 / H.264",L"In MP4 / H.264 umwandeln",L"Convertir en MP4 / H.264",L"转换为 MP4 / H.264"}},
@@ -47,8 +73,17 @@ const Text texts[] = {
  {"cancelled", {L"Cancelled",L"Отменено",L"Abgebrochen",L"Annulé",L"已取消"}},
  {"cancelling", {L"Cancelling…",L"Отмена…",L"Wird abgebrochen…",L"Annulation…",L"正在取消…"}},
  {"invalid", {L"Invalid settings or file selection.",L"Некорректные параметры или набор файлов.",L"Ungültige Einstellungen oder Dateiauswahl.",L"Paramètres ou sélection de fichiers incorrects.",L"设置或文件选择无效。"}},
+ {"wholeNumberRange", {L"Enter a whole number in this range:",L"Введите целое число в диапазоне:",L"Geben Sie eine ganze Zahl in diesem Bereich ein:",L"Saisissez un nombre entier dans cet intervalle :",L"请输入此范围内的整数："}},
+ {"widthRange", {L"Enter 0 for the original size, or a whole number from 2 to 16384.",L"Введите 0 для исходного размера или целое число от 2 до 16384.",L"Geben Sie 0 für die Originalgröße oder eine ganze Zahl von 2 bis 16384 ein.",L"Saisissez 0 pour la taille originale, ou un nombre entier de 2 à 16384.",L"输入 0 保持原始尺寸，或输入 2 到 16384 之间的整数。"}},
+ {"patternRequired", {L"Enter a name pattern, for example {name}_{n}.",L"Введите шаблон имени, например {name}_{n}.",L"Geben Sie ein Namensmuster ein, zum Beispiel {name}_{n}.",L"Saisissez un modèle de nom, par exemple {name}_{n}.",L"请输入名称模板，例如 {name}_{n}。"}},
+ {"outputDirectory", {L"Choose a folder, or leave this empty to use each source folder. This path is a file.",L"Выберите папку или оставьте поле пустым для сохранения рядом с исходным файлом. Этот путь указывает на файл.",L"Wählen Sie einen Ordner, oder lassen Sie das Feld für den jeweiligen Quellordner leer. Dieser Pfad ist eine Datei.",L"Choisissez un dossier, ou laissez ce champ vide pour utiliser le dossier de chaque source. Ce chemin désigne un fichier.",L"请选择文件夹，或留空以使用各源文件所在的文件夹。此路径指向文件。"}},
  {"missing", {L"File is missing or is not a regular file: ",L"Файл отсутствует или не является обычным файлом: ",L"Datei fehlt oder ist keine reguläre Datei: ",L"Fichier absent ou non régulier : ",L"文件不存在或不是普通文件："}},
  {"engine", {L"Bundled engine is missing. Reinstall Context Actions: ",L"Нет комплектного движка. Переустановите Context Actions: ",L"Mitgelieferte Engine fehlt. Context Actions neu installieren: ",L"Moteur fourni absent. Réinstallez Context Actions : ",L"缺少内置引擎。请重新安装 Context Actions："}},
+ {"systemEngine", {L"Required tool is missing: ",L"Не найдена необходимая программа: ",L"Benötigtes Programm fehlt: ",L"Outil requis introuvable : ",L"缺少所需工具："}},
+ {"writerPdf", {L"PDF with LibreOffice Writer",L"PDF через LibreOffice Writer",L"PDF mit LibreOffice Writer",L"PDF avec LibreOffice Writer",L"通过 LibreOffice Writer 导出 PDF"}},
+ {"calcPdf", {L"PDF with LibreOffice Calc",L"PDF через LibreOffice Calc",L"PDF mit LibreOffice Calc",L"PDF avec LibreOffice Calc",L"通过 LibreOffice Calc 导出 PDF"}},
+ {"needLibreOffice", {L"Install LibreOffice Writer and Calc to export Office files to PDF.",L"Для экспорта файлов Office в PDF установите LibreOffice Writer и Calc.",L"Installieren Sie LibreOffice Writer und Calc für den PDF-Export.",L"Installez LibreOffice Writer et Calc pour exporter les fichiers Office en PDF.",L"请安装 LibreOffice Writer 和 Calc，以将 Office 文件导出为 PDF。"}},
+ {"renameBusy", {L"Another rename or undo is running.",L"Выполняется другое переименование или отмена.",L"Eine andere Umbenennung oder Rückgängig-Aktion läuft.",L"Un autre renommage ou une annulation est en cours.",L"正在执行另一项重命名或撤销操作。"}},
  {"conflict", {L"Name conflict or invalid filename: ",L"Конфликт или недопустимое имя: ",L"Namenskonflikt oder ungültiger Dateiname: ",L"Conflit ou nom de fichier incorrect : ",L"名称冲突或无效文件名："}},
  {"sizeFailed", {L"Cannot reach the size limit within the quality floor. Reduce width/FPS or increase the limit.",L"Лимит размера недостижим в пределах качества. Уменьшите ширину/FPS или увеличьте лимит.",L"Größenlimit bei dieser Qualität nicht erreichbar. Breite/FPS reduzieren oder Limit erhöhen.",L"Limite impossible avec cette qualité. Réduisez largeur/FPS ou augmentez la limite.",L"无法在质量下限内达到大小限制。请降低宽度/帧率或提高限制。"}},
  {"quality", {L"Video CRF (0–51; lower = better)",L"CRF видео (0–51; ниже = лучше)",L"Video-CRF (0–51; kleiner = besser)",L"CRF vidéo (0–51 ; plus bas = mieux)",L"视频 CRF（0–51；越低越好）"}},
@@ -81,33 +116,21 @@ std::mutex localeMutex;
 std::wstring selectedLanguage;
 }
 
-fs::path dataDirectory() {
-    wchar_t value[32768]{};
-    if (GetEnvironmentVariableW(L"CONTEXT_ACTIONS_DATA_DIR", value, 32768)) return fs::path(value);
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", value, 32768)) throw std::runtime_error("LOCALAPPDATA is unavailable");
-    return fs::path(value) / L"Context Actions";
-}
 std::wstring language() {
     std::lock_guard lock(localeMutex);
-    if (selectedLanguage.empty()) {
-        wchar_t value[32]{};
-        GetPrivateProfileStringW(L"ui", L"language", L"", value, 32, (dataDirectory() / L"settings.ini").c_str());
-        selectedLanguage = value;
-        if (selectedLanguage.empty()) { GetUserDefaultLocaleName(value, 32); selectedLanguage = value; }
-    }
+    if (selectedLanguage.empty()) selectedLanguage = readLanguageSetting();
     return selectedLanguage;
 }
 void setLanguage(const std::wstring& value) {
     std::lock_guard lock(localeMutex);
-    selectedLanguage = value;
     fs::create_directories(dataDirectory());
-    if (!WritePrivateProfileStringW(L"ui", L"language", value.c_str(), (dataDirectory() / L"settings.ini").c_str()))
-        throw std::runtime_error(utf8(systemError(GetLastError())));
+    writeLanguageSetting(value);
+    selectedLanguage = value;
 }
 std::wstring tr(const char* key) {
     const auto lang = language();
     int index = lang.starts_with(L"ru") ? 1 : lang.starts_with(L"de") ? 2 : lang.starts_with(L"fr") ? 3 : lang.starts_with(L"zh") ? 4 : 0;
-    for (const auto& text : texts) if (strcmp(key, text.key) == 0) return text.values[index];
+    for (const auto& text : texts) if (std::strcmp(key, text.key) == 0) return text.values[index];
     return wide(key);
 }
 }

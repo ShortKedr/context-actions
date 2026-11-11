@@ -1,4 +1,4 @@
-name: Windows preview
+name: Windows build
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
@@ -6,20 +6,70 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v6
         with:
-          path: .build-tools/downloads
-          key: windows-inputs-${{ hashFiles('dependencies.json') }}
+          persist-credentials: false
+      - name: Ensure native XAML build tools are installed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer'
+          $vswhere = Join-Path $installer 'vswhere.exe'
+          $version = '[17.0,18.0)'
+          $components = @(
+            'Microsoft.VisualStudio.Component.WindowsAppSdkSupport.Cpp',
+            'Microsoft.VisualStudio.ComponentGroup.UWP.Support',
+            'Microsoft.VisualStudio.ComponentGroup.UWP.VC'
+          )
+          $ready = & $vswhere -latest -version $version -requires $components -property installationPath
+          if (-not $ready) {
+            $vs = & $vswhere -latest -version $version -property installationPath
+            if (-not $vs) { throw 'Visual Studio 2022 is missing from the runner.' }
+            $options = @('modify', '--installPath', ('"{0}"' -f $vs), '--quiet', '--norestart')
+            foreach ($component in $components) { $options += @('--add', $component) }
+            $setup = Start-Process -FilePath (Join-Path $installer 'setup.exe') -ArgumentList $options -Wait -PassThru -WindowStyle Hidden
+            if ($setup.ExitCode -notin 0, 3010) { throw "Visual Studio Installer exited with code $($setup.ExitCode)." }
+            $ready = & $vswhere -latest -version $version -requires $components -property installationPath
+            if (-not $ready) { throw 'The native XAML build components are missing after setup.' }
+          }
+      - uses: actions/cache@v5
+        with:
+          path: |
+            .build-tools/downloads
+            .build-tools/nuget
+          key: windows-inputs-${{ hashFiles('dependencies.json', 'src/ui/packages.config') }}
       - name: Build, lightweight tests and installer
         shell: pwsh
         run: ./scripts/build-and-package.ps1
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Archive the portable app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = 'dist/ContextActions-win-x64.zip'
+          & "$env:SystemRoot/System32/tar.exe" -a -cf $archive -C dist ContextActions
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+          "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ContextActions-win-x64-app
+          path: |
+            dist/ContextActions-win-x64.zip
+            dist/ContextActions-win-x64.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
         with:
           name: ContextActions-win-x64
           path: |
             dist/*setup.exe
-            dist/*.sha256
+            dist/*setup.exe.sha256
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ContextActions-win-x64-reports
+          path: |
             dist/reports/
           if-no-files-found: warn
