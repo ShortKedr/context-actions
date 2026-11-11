@@ -43,7 +43,7 @@ main {
 
 .stage {
   --offset: -2.8s;
-  --progress: 0%;
+  --progress: 0;
   container-type: inline-size;
   display: grid;
   grid-template-columns: 39% minmax(0, 1fr);
@@ -291,7 +291,13 @@ main {
   background: #40394a;
 }
 
-.progress-fill { display: block; width: var(--progress); height: 100%; background: #d5b3ed; }
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: #d5b3ed;
+  transform: scaleX(var(--progress));
+  transform-origin: left;
+}
 
 .footer-row { min-height: calc(4.1 * var(--u)); }
 .actions { flex-shrink: 0; }
@@ -449,6 +455,38 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .embedded main { width: 100%; padding: 0; }
 .embedded :is(.masthead, .links) { display: none; }
 .embedded .player { border-radius: 0; box-shadow: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .embedded .scene[hidden] { display: block !important; }
+
+  .embedded .explorer {
+    animation: explorer-scene 10s ease-in-out both paused;
+    animation-delay: var(--offset);
+  }
+
+  .embedded .processing {
+    animation: processing-scene 10s ease-in-out both paused;
+    animation-delay: var(--offset);
+  }
+
+  .embedded :is(.parent-menu, .submenu, .app-window, .pointer) {
+    animation-timing-function: ease-in-out;
+  }
+
+  .embedded :is(.run, .cancel, .result-links) { transition: opacity 200ms ease-out; }
+  .embedded .result-links { opacity: 0; }
+  .embedded [data-step="done"] .result-links { opacity: 1; }
+}
+
+@keyframes explorer-scene {
+  0%, 46%, 100% { opacity: 0; }
+  2.5%, 42% { opacity: 1; }
+}
+
+@keyframes processing-scene {
+  0%, 96% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 @media (max-width: 720px) {
   main { width: calc(100% - 32px); }

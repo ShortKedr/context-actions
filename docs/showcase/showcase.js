@@ -1,7 +1,9 @@
 "use strict";
 
 const embedded = new URLSearchParams(location.search).has("embed");
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const stage = document.querySelector(".stage");
+const sceneCopy = document.querySelector(".scene-copy");
 const title = document.querySelector("#scene-title");
 const summary = document.querySelector("#scene-summary");
 const explorer = document.querySelector(".explorer");
@@ -70,6 +72,12 @@ function showTime(seconds) {
     stage.dataset.step = step.id;
     title.textContent = step.title;
     summary.textContent = step.summary;
+    if (embedded && !reducedMotion.matches) {
+      sceneCopy.animate(
+        [{ opacity: 0.35, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
+        { duration: 260, easing: "ease-out" },
+      );
+    }
     explorer.hidden = step.chapter !== 0;
     processing.hidden = step.chapter === 0;
 
@@ -86,7 +94,7 @@ function showTime(seconds) {
 
   const progress = Math.min(Math.max(0, (currentTime - runningAt) / (doneAt - runningAt)), 1);
   stage.style.setProperty("--offset", `-${currentTime}s`);
-  stage.style.setProperty("--progress", `${progress * 100}%`);
+  stage.style.setProperty("--progress", progress);
 
   if (embedded) return;
 
