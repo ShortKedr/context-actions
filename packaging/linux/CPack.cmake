@@ -13,12 +13,16 @@ set(CPACK_DEBIAN_PACKAGE_SECTION utils)
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-4-1 (>= 4.6), ffmpeg, qpdf")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "libreoffice-writer, libreoffice-calc")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_LIST_DIR}/preinst")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
 
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 set(CPACK_RPM_PACKAGE_LICENSE "MIT")
 set(CPACK_RPM_USER_FILELIST "%license /usr/share/doc/context-actions/LICENSE")
 set(CPACK_RPM_PACKAGE_REQUIRES "gtk4 >= 4.6, ffmpeg, qpdf")
+set(CPACK_RPM_PACKAGE_REQUIRES_PRE "rpm >= 4.16")
 set(CPACK_RPM_PACKAGE_SUGGESTS "libreoffice-writer, libreoffice-calc")
+set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_LIST_DIR}/rpm-preinstall.sh")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
     /usr/share/applications
     /usr/share/icons

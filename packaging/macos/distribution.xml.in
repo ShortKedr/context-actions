@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Context Actions</title>
+  <options customize="always" hostArchitectures="arm64,x86_64"/>
+  <choices-outline>
+    <line choice="allow-replacement"/>
+    <line choice="app"/>
+  </choices-outline>
+  <choice id="allow-replacement" title="Allow reinstall or downgrade"
+          description="Replace the installed version of Context Actions with the same or an older version."
+          start_selected="false">
+    <pkg-ref id="@IDENTIFIER@.allow-replacement"/>
+  </choice>
+  <choice id="app" title="Context Actions" description="Install the Context Actions app."
+          enabled="false" selected="true">
+    <pkg-ref id="@IDENTIFIER@.upgrade-only" active="!choices['allow-replacement'].selected"/>
+    <pkg-ref id="@IDENTIFIER@"/>
+  </choice>
+  <pkg-ref id="@IDENTIFIER@.allow-replacement">allow-replacement.pkg</pkg-ref>
+  <pkg-ref id="@IDENTIFIER@.upgrade-only">upgrade-only.pkg</pkg-ref>
+  <pkg-ref id="@IDENTIFIER@">app.pkg</pkg-ref>
+</installer-gui-script>

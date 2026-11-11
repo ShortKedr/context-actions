@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+# Fresh installs and recovery calls do not replace an installed version.
+[ "$1" = upgrade ] || exit 0
+
+installed_version=$2
+incoming_version=$3
+if dpkg --compare-versions "$incoming_version" gt "$installed_version"; then
+    exit 0
+fi
+if [ "${CONTEXT_ACTIONS_GUI_DOWNGRADE:-}" = "deb:$incoming_version" ]; then
+    exit 0
+fi
+
+printf 'Context Actions %s is installed. Setup cannot replace it with %s. Confirm a reinstall or downgrade in the desktop installer.\n' \
+    "$installed_version" "$incoming_version" >&2
+exit 1

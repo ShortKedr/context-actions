@@ -2,11 +2,15 @@
 
 Общее ядро и CLI собираются на каждой платформе. Windows использует WinUI 3 и расширение File Explorer, macOS использует AppKit и Finder, Linux использует GTK 4 и freedesktop desktop entry.
 
+Установщики сравнивают номера версий. Более новая версия заменяет установленную. Для переустановки той же версии или отката нужно явно отметить флажок в интерфейсе установщика. Архивы для ручной распаковки и старые установщики, выпущенные до добавления проверки, работают по своим прежним правилам.
+
 ## Windows 11 x64
 
 Требуются Windows 11 x64, Visual Studio 2022 C++ Build Tools (`v143`), Windows SDK **10.0.22621.0**, CMake **3.25+** и PowerShell 5.1/7. Для native XAML нужны компоненты **C++ WinUI app development build tools** и **Universal Windows Platform build tools**: `Microsoft.VisualStudio.ComponentGroup.UWP.VC.BuildTools` и `Microsoft.VisualStudio.ComponentGroup.UWP.BuildTools`. Скрипты проверяют их наличие, но не устанавливают системные компоненты.
 
 На машине пользователя готового приложения средства сборки не нужны. WinUI 3 собран с `WindowsAppSDKSelfContained=true`: DLL и PRI Windows App SDK находятся рядом с EXE. Приложение использует статический MSVC runtime и системный UCRT Windows 11. Переносите всю папку приложения. Установщик релиза загружает FFmpeg, ffprobe и qpdf из исходных источников, проверяет SHA-256 и устанавливает их в `engines/`. Для установки требуется доступ к сети. Для ZIP установите [FFmpeg](https://ffmpeg.org/download.html#build-windows) и [qpdf](https://github.com/qpdf/qpdf/releases) отдельно и добавьте их каталоги `bin` в `PATH`. Приложение также ищет движки и их DLL в своей папке `engines/`.
+
+Если версия установщика совпадает с установленной или ниже неё, Windows показывает страницу с номерами обеих версий. Отметьте **Разрешить переустановку или откат** и продолжите установку.
 
 ```powershell
 .\scripts\build-and-package.ps1
@@ -91,6 +95,8 @@ bash packaging/macos/package.sh build/macos dist/macos
 
 Приложение `build/macos/ContextActions.app` содержит срезы для Intel и Apple Silicon. Упаковка создаёт ZIP приложения и PKG для установки в `/Applications` в `dist/macos`. У приложения ad-hoc подпись, PKG без Developer ID и нотариального заверения. FFmpeg, qpdf и LibreOffice устанавливаются отдельно. Finder может открывать файлы через **Open With**, а CLI доступен через `ContextActions.app/Contents/MacOS/ContextActions`. Настройки и журнал переименования хранятся в `~/Library/Application Support/Context Actions`. [Документация Apple о Universal Binary](https://developer.apple.com/documentation/apple-silicon/building-a-universal-macos-binary), [Homebrew ffmpeg-full](https://formulae.brew.sh/formula/ffmpeg-full).
 
+Для переустановки или отката откройте PKG в Installer и отметьте **Allow reinstall or downgrade** на экране выбора компонентов.
+
 ## Linux
 
 GTK 4.6+ используется на всех дистрибутивах Linux. Ниже приведена сборка на Ubuntu 24.04, которая служит базовой системой CI. На других дистрибутивах установите эквивалентные пакеты GTK 4, компилятора C++20 и инструментов сборки. FFmpeg должен содержать энкодеры `libx264`, `libx265` и `libwebp`.
@@ -105,6 +111,8 @@ cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
 ```
 
 DEB устанавливается через `apt install ./<имя-пакета>.deb`, RPM через `dnf install ./<имя-пакета>.rpm`. Для Fedora может понадобиться RPM Fusion Free с полным FFmpeg. В архиве приложение находится в `usr/bin/context-actions`, ему нужны совместимые системные библиотеки GTK и инструменты FFmpeg и qpdf. Для экспорта Office в PDF нужны пакеты LibreOffice Writer и Calc. После установки ярлык **Context Actions** появляется в меню приложений и в **Open With** для зарегистрированных типов файлов. Настройки хранятся в `$XDG_DATA_HOME/context-actions` или `~/.local/share/context-actions`. [Зависимости GTK по дистрибутивам](https://www.gtk.org/docs/installations/linux).
+
+Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB или RPM. При наличии Zenity и PolicyKit запустите `bash ContextActions-linux-installer.sh`, выберите скачанный пакет и отметьте **Allow reinstall or downgrade**. Установщик запросит подтверждение через PolicyKit. Для локальной сборки используйте `bash packaging/linux/ContextActions-linux-installer.sh`.
 
 ## GitHub Actions
 

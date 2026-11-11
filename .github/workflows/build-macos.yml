@@ -40,6 +40,17 @@ jobs:
           codesign --verify --strict --all-architectures "$app"
           sudo installer -pkg dist/macos/*.pkg -target /
           /Applications/ContextActions.app/Contents/MacOS/ContextActions --help
+          if sudo installer -pkg dist/macos/*.pkg -target /; then
+            echo 'PKG unexpectedly allowed reinstalling the same version.' >&2
+            exit 1
+          fi
+          installed_plist=/Applications/ContextActions.app/Contents/Info.plist
+          sudo /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 9999.0.0' "$installed_plist"
+          if sudo installer -pkg dist/macos/*.pkg -target /; then
+            echo 'PKG unexpectedly allowed a downgrade.' >&2
+            exit 1
+          fi
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$installed_plist")" = '9999.0.0'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-macos-universal-app

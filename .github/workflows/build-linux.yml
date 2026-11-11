@@ -57,6 +57,8 @@ jobs:
       - name: Build archive, DEB and RPM
         run: |
           cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
+          install -m 0755 packaging/linux/ContextActions-linux-installer.sh dist/linux/
+          (cd dist/linux && sha256sum ContextActions-linux-installer.sh > ContextActions-linux-installer.sh.sha256)
       - name: Verify packages
         env:
           DEB_ARCH: ${{ matrix.arch }}
@@ -68,6 +70,13 @@ jobs:
           test "$(dpkg-deb --field dist/linux/*.deb Architecture)" = "$DEB_ARCH"
           sudo apt-get install -y --no-install-recommends "$PWD"/dist/linux/*.deb
           /usr/bin/context-actions --help
+          if sudo dpkg -i dist/linux/*.deb; then
+            echo 'DEB unexpectedly allowed reinstalling the same version.' >&2
+            exit 1
+          fi
+          test "$(dpkg-query -W -f='${Status}' context-actions)" = 'install ok installed'
+          version="$(dpkg-deb --field dist/linux/*.deb Version)"
+          sudo env "CONTEXT_ACTIONS_GUI_DOWNGRADE=deb:$version" dpkg -i dist/linux/*.deb
           desktop-file-validate /usr/share/applications/io.github.ShortKedr.ContextActions.desktop
           test "$(rpm -qp --queryformat '%{ARCH}' dist/linux/*.rpm)" = "$(uname -m)"
           rpm -qp --requires dist/linux/*.rpm
@@ -91,5 +100,7 @@ jobs:
             dist/linux/*.rpm
             dist/linux/*.deb.sha256
             dist/linux/*.rpm.sha256
+            dist/linux/ContextActions-linux-installer.sh
+            dist/linux/ContextActions-linux-installer.sh.sha256
           compression-level: 0
           if-no-files-found: error

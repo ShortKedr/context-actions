@@ -107,6 +107,21 @@ jobs:
               throw "The installer exited with code $($setup.ExitCode)."
             }
             ./scripts/smoke-test.ps1 -AppDirectory $install -ReportDirectory dist/reports/installed
+            $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{A836FB4F-6548-4FC3-8D67-50267B25A418}_is1'
+            $version = Get-ItemPropertyValue -LiteralPath $uninstallKey -Name DisplayVersion
+            $exe = Join-Path $install 'ContextActions.exe'
+            $hash = (Get-FileHash -LiteralPath $exe).Hash
+            try {
+              foreach ($installedVersion in @($version, '9999.0.0')) {
+                Set-ItemProperty -LiteralPath $uninstallKey -Name DisplayVersion -Value $installedVersion
+                $setup = Start-Process -FilePath $installer.FullName -ArgumentList $options -Wait -PassThru -WindowStyle Hidden
+                if ($setup.ExitCode -ne 7 -or (Get-FileHash -LiteralPath $exe).Hash -ne $hash) {
+                  throw "Setup did not reject installation over version $installedVersion (exit code $($setup.ExitCode))."
+                }
+              }
+            } finally {
+              Set-ItemProperty -LiteralPath $uninstallKey -Name DisplayVersion -Value $version
+            }
           } finally {
             $uninstaller = Join-Path $install 'unins000.exe'
             if (Test-Path -LiteralPath $uninstaller) {
