@@ -172,6 +172,7 @@ void consumeJob(const fs::path& path) {
 }
 std::vector<std::wstring> videoArguments(const Options& o, const fs::path& input, const fs::path& output, double duration, int attempt) {
     bool hevc=o.action==Action::h265, telegram=o.action==Action::telegram;
+    // FFmpeg detects the input stream's codec and selects its default decoder.
     std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",L"-progress",L"pipe:1",L"-i",pathText(input),L"-map",L"0:v:0"};
     if (o.mute||telegram) args.push_back(L"-an"); else args.insert(args.end(),{L"-map",L"0:a:0?",L"-c:a",L"aac",L"-b:a",L"128k"});
     args.insert(args.end(),{L"-c:v",hevc?L"libx265":L"libx264",L"-preset",L"medium",L"-pix_fmt",L"yuv420p"});
