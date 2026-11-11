@@ -16,7 +16,7 @@ The walkthrough recreates the File Explorer and WinUI 3 preview screens with a s
 
 See the [format-to-format conversion table](docs/support.md#format-conversions) and the [file operations and limits](docs/support.md#file-operations).
 
-Open an action from File Explorer on Windows, use **Open With** in Finder or a Linux file manager, or add files in the app with the picker, drag and drop, or command-line arguments. Batches show per-file results and can be canceled. Conversions keep the originals and use unique output names. Scripts can run actions with `--headless` and `--report`.
+Right-click selected files in Windows File Explorer, GNOME Files, or KDE Dolphin to open Context Actions. Use **Open With** in Finder or other Linux file managers, or add files in the app with the picker, drag and drop, or command-line arguments. Batches show per-file results and can be canceled. Conversions keep the originals and use unique output names. Scripts can run actions with `--headless` and `--report`.
 
 The app uses shared English, Russian, German, French, and Simplified Chinese translations. The Windows app also offers theme controls and a way to check Microsoft Office availability again.
 
@@ -26,7 +26,7 @@ The app uses shared English, Russian, German, French, and Simplified Chinese tra
 | --- | --- | --- |
 | Windows 11 x64 | WinUI 3 and File Explorer integration | Portable ZIP and Inno Setup EXE |
 | macOS 11+, Intel and Apple Silicon | AppKit with Finder file opening | Universal app ZIP and PKG |
-| Linux x86-64 and ARM64 | GTK 4.6+ with desktop launcher and file opening | DEB, RPM, Arch x86-64 package, and portable tar archive |
+| Linux x86-64 and ARM64 | GTK 4.6+ with GNOME Files and KDE Dolphin context menus | DEB, RPM, Arch x86-64 package, and portable tar archive |
 
 Get app archives and installers from [GitHub Releases](https://github.com/ShortKedr/context-actions/releases). Windows Setup downloads and verifies the media tools and offers File Explorer integration as an opt-in option. The Windows portable app can use media tools on `PATH`. On macOS, install them with `brew install ffmpeg-full qpdf`. Linux packages declare their media dependencies. The portable Linux build uses the distribution's GTK 4, FFmpeg, and qpdf packages. [Local build and installation instructions](docs/build.md)
 

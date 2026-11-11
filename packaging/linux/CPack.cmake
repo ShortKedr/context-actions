@@ -18,7 +18,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/portable-installer/VERSION" CO
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_SECTION utils)
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-4-1 (>= 4.6), ffmpeg, qpdf")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-4-1 (>= 4.6), ffmpeg, qpdf, python3-nautilus")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "libreoffice-writer, libreoffice-calc")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_LIST_DIR}/preinst")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
@@ -26,12 +26,16 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
 set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 set(CPACK_RPM_PACKAGE_LICENSE "MIT")
 set(CPACK_RPM_USER_FILELIST "%license /usr/share/doc/context-actions/LICENSE")
-set(CPACK_RPM_PACKAGE_REQUIRES "gtk4 >= 4.6, ffmpeg, qpdf")
+set(CPACK_RPM_PACKAGE_REQUIRES "gtk4 >= 4.6, ffmpeg, qpdf, nautilus-python")
 set(CPACK_RPM_PACKAGE_REQUIRES_PRE "rpm >= 4.16")
 set(CPACK_RPM_PACKAGE_SUGGESTS "libreoffice-writer, libreoffice-calc")
 set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_LIST_DIR}/rpm-preinstall.sh")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
     /usr/share/applications
+    /usr/share/kio
+    /usr/share/kio/servicemenus
+    /usr/share/nautilus-python
+    /usr/share/nautilus-python/extensions
     /usr/share/icons
     /usr/share/icons/hicolor
     /usr/share/icons/hicolor/256x256

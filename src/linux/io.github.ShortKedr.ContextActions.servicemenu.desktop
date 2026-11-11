@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/allfiles;
+Actions=openContextActions;
+X-KDE-Protocol=file
+X-KDE-Priority=TopLevel
+
+[Desktop Action openContextActions]
+Name=Context Actions
+Icon=io.github.ShortKedr.ContextActions
+Exec=context-actions -- %F

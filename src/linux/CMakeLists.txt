@@ -13,6 +13,10 @@ set_target_properties(ContextActions PROPERTIES OUTPUT_NAME context-actions)
 install(TARGETS ContextActions RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES io.github.ShortKedr.ContextActions.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES context_actions.py
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/nautilus-python/extensions)
+install(PROGRAMS io.github.ShortKedr.ContextActions.servicemenu.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/kio/servicemenus)
 install(FILES icon.png
     DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
     RENAME io.github.ShortKedr.ContextActions.png)

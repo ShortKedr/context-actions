@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     printf '%s\n' 'Run install.sh install [--allow-reinstall-or-downgrade] to install for your user.' \
-        'Run install.sh uninstall to remove the per-user app and launcher.'
+        'Run install.sh uninstall to remove the per-user app and desktop integration.'
 }
 
 fail() {
@@ -44,8 +44,9 @@ app_id=io.github.ShortKedr.ContextActions
 app_dir="$data_home/context-actions-app"
 launcher="$data_home/applications/$app_id.desktop"
 icon="$data_home/icons/hicolor/256x256/apps/$app_id.png"
-launcher_target="$app_dir/$app_id.desktop"
-icon_target="$app_dir/$app_id.png"
+nautilus_menu="$data_home/nautilus-python/extensions/context_actions.py"
+dolphin_menu="$data_home/kio/servicemenus/$app_id.servicemenu.desktop"
+desktop_links=("$launcher" "$icon" "$nautilus_menu" "$dolphin_menu")
 
 valid_version() {
     [[ $1 =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
@@ -80,8 +81,9 @@ if [[ $operation == uninstall ]]; then
         printf '%s\n' 'Context Actions is not installed for this user.'
         exit 0
     fi
-    if owned_link "$launcher" "$launcher_target"; then rm -- "$launcher"; fi
-    if owned_link "$icon" "$icon_target"; then rm -- "$icon"; fi
+    for link in "${desktop_links[@]}"; do
+        if owned_link "$link" "$app_dir/${link##*/}"; then rm -- "$link"; fi
+    done
     rm -- "$app_dir"
     rm -rf -- "$current"
     refresh_desktop
@@ -92,6 +94,8 @@ fi
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -f $source_dir/VERSION && -x $source_dir/usr/bin/context-actions &&
    -f $source_dir/usr/share/applications/$app_id.desktop &&
+   -f $source_dir/usr/share/nautilus-python/extensions/context_actions.py &&
+   -f $source_dir/usr/share/kio/servicemenus/$app_id.servicemenu.desktop &&
    -f $source_dir/usr/share/icons/hicolor/256x256/apps/$app_id.png &&
    -f $source_dir/usr/share/doc/context-actions/LICENSE ]] ||
     fail 'Run the installer from an extracted Context Actions Linux app archive.'
@@ -103,25 +107,24 @@ if [[ -n $current_version ]] && ! $allow_replace; then
     [[ $version == "$newest" && $version != "$current_version" ]] ||
         fail "Context Actions $current_version is installed. Use --allow-reinstall-or-downgrade to replace it with $version."
 fi
-if [[ -e $launcher || -L $launcher ]]; then
-    owned_link "$launcher" "$launcher_target" || fail "The installer does not own $launcher."
-fi
-if [[ -e $icon || -L $icon ]]; then
-    owned_link "$icon" "$icon_target" || fail "The installer does not own $icon."
-fi
+for link in "${desktop_links[@]}"; do
+    if [[ -e $link || -L $link ]]; then
+        owned_link "$link" "$app_dir/${link##*/}" || fail "The installer does not own $link."
+    fi
+done
 
 if ! LD_BIND_NOW=1 "$source_dir/usr/bin/context-actions" --help >/dev/null; then
     fail 'This archive needs a matching Linux architecture and compatible glibc and GTK 4 libraries.'
 fi
 
-mkdir -p -- "${launcher%/*}" "${icon%/*}"
+for link in "${desktop_links[@]}"; do
+    mkdir -p -- "${link%/*}"
+done
 stage=$(mktemp -d -- "$data_home/.context-actions-app.XXXXXXXX")
-created_launcher=false
-created_icon=false
+created_links=()
 cleanup() {
     if ! owned_link "$app_dir" "$stage"; then
-        if $created_launcher; then rm -f -- "$launcher"; fi
-        if $created_icon; then rm -f -- "$icon"; fi
+        for link in "${created_links[@]}"; do rm -f -- "$link"; done
         rm -rf -- "$stage"
     fi
 }
@@ -133,6 +136,8 @@ install -m 0755 -- "$source_dir/install.sh" "$stage/install.sh"
 install -m 0644 -- "$source_dir/VERSION" "$stage/VERSION"
 install -m 0644 -- "$source_dir/usr/share/doc/context-actions/LICENSE" "$stage/LICENSE"
 install -m 0644 -- "$source_dir/usr/share/icons/hicolor/256x256/apps/$app_id.png" "$stage/$app_id.png"
+install -m 0644 -- "$source_dir/usr/share/nautilus-python/extensions/context_actions.py" \
+    "$stage/context_actions.py"
 
 # Quote the path for Exec, then escape backslashes for the desktop file's string layer.
 executable="$app_dir/context-actions"
@@ -142,24 +147,33 @@ executable=${executable//\$/\\\$}
 executable=${executable//\`/\\\`}
 executable=${executable//\\/\\\\}
 executable=${executable//%/%%}
-while IFS= read -r line; do
-    if [[ $line == Exec=* ]]; then printf 'Exec=/usr/bin/env -- "%s" -- %%F\n' "$executable"
-    else printf '%s\n' "$line"; fi
-done < "$source_dir/usr/share/applications/$app_id.desktop" > "$stage/$app_id.desktop"
+write_desktop_file() {
+    local line
+    while IFS= read -r line; do
+        if [[ $line == Exec=* ]]; then printf 'Exec=/usr/bin/env -- "%s" -- %%F\n' "$executable"
+        else printf '%s\n' "$line"; fi
+    done < "$1" > "$2"
+}
+write_desktop_file "$source_dir/usr/share/applications/$app_id.desktop" "$stage/$app_id.desktop"
+write_desktop_file "$source_dir/usr/share/kio/servicemenus/$app_id.servicemenu.desktop" \
+    "$stage/$app_id.servicemenu.desktop"
+chmod +x -- "$stage/$app_id.servicemenu.desktop"
 
-if [[ ! -L $launcher ]]; then
-    ln -sT -- "$launcher_target" "$launcher"
-    created_launcher=true
-fi
-if [[ ! -L $icon ]]; then
-    ln -sT -- "$icon_target" "$icon"
-    created_icon=true
-fi
+for link in "${desktop_links[@]}"; do
+    if [[ ! -L $link ]]; then
+        ln -sT -- "$app_dir/${link##*/}" "$link"
+        created_links+=("$link")
+    fi
+done
 ln -s -- "$stage" "$stage/active"
 mv -Tf -- "$stage/active" "$app_dir"
 if [[ -n $current ]]; then rm -rf -- "$current"; fi
 refresh_desktop
 printf 'Installed Context Actions %s for this user.\nExecutable %s\n' "$version" "$app_dir/context-actions"
+if command -v nautilus >/dev/null; then
+    printf '%s\n' 'GNOME Files needs the Nautilus Python extension loader (python3-nautilus or nautilus-python).' \
+        'Restart GNOME Files to load the Context Actions menu.'
+fi
 
 for tool in ffmpeg ffprobe qpdf; do
     if ! command -v "$tool" >/dev/null; then

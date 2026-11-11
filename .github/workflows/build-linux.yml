@@ -62,7 +62,7 @@ jobs:
             "${apt_root[@]}" timeout --kill-after=5s 100s apt-get "${apt_options[@]}" \
               update -o APT::Update::Error-Mode=any || return
             "${apt_root[@]}" apt-get "${apt_options[@]}" install -y --no-install-recommends \
-              ninja-build libgtk-4-dev ffmpeg qpdf desktop-file-utils dpkg-dev rpm cpio
+              ninja-build libgtk-4-dev ffmpeg qpdf python3-nautilus desktop-file-utils dpkg-dev rpm cpio
           }
 
           if ! install_tools "$archive" "$security" && ! install_tools "$mirror" "$mirror"; then
@@ -89,6 +89,7 @@ jobs:
           tar -xzf dist/linux/*.tar.gz --strip-components=1 -C build/linux/archive-check
           build/linux/archive-check/usr/bin/context-actions --help
           test "$(dpkg-deb --field dist/linux/*.deb Architecture)" = "$DEB_ARCH"
+          dpkg-deb --field dist/linux/*.deb Depends | grep -w python3-nautilus
           sudo apt-get install -y --no-install-recommends "$PWD"/dist/linux/*.deb
           /usr/bin/context-actions --help
           if sudo dpkg -i dist/linux/*.deb; then
@@ -99,12 +100,16 @@ jobs:
           version="$(dpkg-deb --field dist/linux/*.deb Version)"
           sudo env "CONTEXT_ACTIONS_GUI_DOWNGRADE=deb:$version" dpkg -i dist/linux/*.deb
           desktop-file-validate /usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+          test -r /usr/share/nautilus-python/extensions/context_actions.py
+          test -x /usr/share/kio/servicemenus/io.github.ShortKedr.ContextActions.servicemenu.desktop
           test "$(rpm -qp --queryformat '%{ARCH}' dist/linux/*.rpm)" = "$(uname -m)"
-          rpm -qp --requires dist/linux/*.rpm
+          rpm -qp --requires dist/linux/*.rpm | grep -x nautilus-python
           mkdir -p build/linux/rpm-check
           rpm2cpio dist/linux/*.rpm | (cd build/linux/rpm-check && cpio -id)
           build/linux/rpm-check/usr/bin/context-actions --help
           desktop-file-validate build/linux/rpm-check/usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+          test -r build/linux/rpm-check/usr/share/nautilus-python/extensions/context_actions.py
+          test -x build/linux/rpm-check/usr/share/kio/servicemenus/io.github.ShortKedr.ContextActions.servicemenu.desktop
       - name: Verify the per-user archive installer
         run: |
           export XDG_DATA_HOME="$RUNNER_TEMP/Context Actions user data"
@@ -112,10 +117,15 @@ jobs:
           app="$XDG_DATA_HOME/context-actions-app"
           launcher="$XDG_DATA_HOME/applications/io.github.ShortKedr.ContextActions.desktop"
           icon="$XDG_DATA_HOME/icons/hicolor/256x256/apps/io.github.ShortKedr.ContextActions.png"
+          nautilus_menu="$XDG_DATA_HOME/nautilus-python/extensions/context_actions.py"
+          dolphin_menu="$XDG_DATA_HOME/kio/servicemenus/io.github.ShortKedr.ContextActions.servicemenu.desktop"
           bash "$installer" install
           "$app/context-actions" --help
           desktop-file-validate "$launcher"
           test -f "$icon"
+          test -r "$nautilus_menu"
+          test -x "$dolphin_menu"
+          test "$(grep '^Exec=' "$dolphin_menu")" = "$(grep '^Exec=' "$launcher")"
           if bash "$installer" install; then
             echo 'The per-user installer allowed replacing the same version without confirmation.' >&2
             exit 1
@@ -127,6 +137,8 @@ jobs:
           test ! -L "$app"
           test ! -L "$launcher"
           test ! -L "$icon"
+          test ! -L "$nautilus_menu"
+          test ! -L "$dolphin_menu"
           test -f "$XDG_DATA_HOME/context-actions/settings"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -160,7 +172,7 @@ jobs:
         timeout-minutes: 20
         run: |
           pacman -Syu --noconfirm --needed \
-            cmake ninja gtk4 ffmpeg qpdf desktop-file-utils hicolor-icon-theme
+            cmake ninja gtk4 ffmpeg qpdf desktop-file-utils hicolor-icon-theme nautilus-python
       - name: Build and verify the Arch package
         run: |
           useradd --create-home context-actions-builder
@@ -177,6 +189,8 @@ jobs:
           pacman -U --noconfirm -- "$package"
           pacman -Q context-actions
           desktop-file-validate /usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+          test -r /usr/share/nautilus-python/extensions/context_actions.py
+          test -x /usr/share/kio/servicemenus/io.github.ShortKedr.ContextActions.servicemenu.desktop
           /usr/bin/context-actions --help
           bash "$source_dir/scripts/smoke-test-posix.sh" /usr/bin/context-actions "$source_dir/build"
           mkdir -p "$GITHUB_WORKSPACE/dist/linux-arch"

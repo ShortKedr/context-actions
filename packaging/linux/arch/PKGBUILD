@@ -5,7 +5,7 @@ pkgdesc='Batch media conversion, PDF assembly, and file renaming'
 arch=('x86_64')
 url='https://github.com/ShortKedr/context-actions'
 license=('MIT')
-depends=('glibc' 'glib2' 'gtk4' 'libgcc' 'libstdc++' 'ffmpeg' 'qpdf' 'hicolor-icon-theme')
+depends=('glibc' 'glib2' 'gtk4' 'libgcc' 'libstdc++' 'ffmpeg' 'qpdf' 'hicolor-icon-theme' 'nautilus-python')
 makedepends=('cmake' 'ninja')
 optdepends=('libreoffice-fresh: document and spreadsheet PDF export'
             'libreoffice-still: document and spreadsheet PDF export')

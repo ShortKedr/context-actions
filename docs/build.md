@@ -105,9 +105,11 @@ bash packaging/macos/package.sh build/macos dist/macos
 - **Fedora и другие RPM-дистрибутивы** — установка через менеджер пакетов, например `sudo dnf install ./<имя-пакета>.rpm`. Для Fedora может понадобиться RPM Fusion Free с полным FFmpeg.
 - **Arch Linux x86-64** — `sudo pacman -U ./context-actions-<версия>-1-x86_64.pkg.tar.zst`. Для сборки из исходников установите зависимости из `packaging/linux/arch/PKGBUILD` и запустите `makepkg` в этом каталоге от обычного пользователя. [Документация Arch о сборке пакетов](https://wiki.archlinux.org/title/Creating_packages).
 
+После установки выберите один или несколько локальных файлов в GNOME Files (Nautilus) или KDE Dolphin и нажмите **Context Actions** в контекстном меню. Для этого меню в Dolphin требуется KDE Frameworks 5.85 или новее. Пакеты DEB, RPM и Arch устанавливают загрузчик расширений Nautilus как зависимость. Если GNOME Files уже запущен, перезапустите его командой `nautilus -q` и снова откройте файловый менеджер. [Документация GNOME](https://gnome.pages.gitlab.gnome.org/nautilus-python/nautilus-python-overview.html), [документация KDE](https://develop.kde.org/docs/apps/dolphin/service-menus/).
+
 ### Переносимый архив
 
-Для других дистрибутивов скачайте `.tar.gz` для x86-64 или ARM64. Он собран на Ubuntu 24.04 и требует совместимых системных библиотек glibc и GTK. После распаковки можно запустить `./usr/bin/context-actions`. Если архив содержит `install.sh`, выполните `bash install.sh install` без sudo, чтобы добавить ярлык **Context Actions** и ассоциации **Open With** для текущего пользователя. Команда `bash install.sh uninstall` удаляет приложение и ярлык, сохраняя настройки. Для подтверждённой переустановки или отката используйте `bash install.sh install --allow-reinstall-or-downgrade`. Скрипту нужны Bash, GNU coreutils и `flock` из util-linux.
+Для других дистрибутивов скачайте `.tar.gz` для x86-64 или ARM64. Он собран на Ubuntu 24.04 и требует совместимых системных библиотек glibc и GTK. После распаковки можно запустить `./usr/bin/context-actions`. Выполните `bash install.sh install` без sudo, чтобы добавить ярлык, ассоциации **Open With** и контекстные меню GNOME Files и Dolphin для текущего пользователя. Для GNOME Files в переносимой установке или при установке из исходников нужен пакет `python3-nautilus` (Debian и Ubuntu) или `nautilus-python` (Fedora и Arch). Команда `bash install.sh uninstall` удаляет приложение, ярлык и контекстные меню, сохраняя настройки. Для подтверждённой переустановки или отката используйте `bash install.sh install --allow-reinstall-or-downgrade`. Скрипту нужны Bash, GNU coreutils и `flock` из util-linux.
 
 ### Сборка из исходников
 
@@ -122,7 +124,7 @@ bash scripts/smoke-test-posix.sh build/linux/src/linux/context-actions build/lin
 cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
 ```
 
-Собранное приложение находится в `build/linux/src/linux/context-actions`. Установка из сборки через `cmake --install build/linux --prefix "$HOME/.local"` копирует бинарник, значок и desktop entry. Для запуска из меню каталог `$HOME/.local/bin` должен быть в `PATH` графического сеанса.
+Собранное приложение находится в `build/linux/src/linux/context-actions`. Установка из сборки через `cmake --install build/linux --prefix "$HOME/.local"` копирует бинарник, значок, ярлык и файлы интеграции GNOME Files и Dolphin. Для запуска из меню каталог `$HOME/.local/bin` должен быть в `PATH` графического сеанса.
 
 Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB, RPM или пакет Arch Linux. При наличии Zenity и PolicyKit запустите `bash ContextActions-linux-installer.sh`, выберите скачанный пакет и отметьте **Allow reinstall or downgrade**. Установщик запросит подтверждение через PolicyKit. Для локальной сборки используйте `bash packaging/linux/ContextActions-linux-installer.sh`.
 
