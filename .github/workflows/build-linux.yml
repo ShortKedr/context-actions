@@ -30,24 +30,45 @@ jobs:
         timeout-minutes: 6
         run: |
           sources="$RUNNER_TEMP/context-actions-ubuntu.list"
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
           if [[ $(dpkg --print-architecture) == arm64 ]]; then
             archive=https://ports.ubuntu.com/ubuntu-ports
             security=$archive
+            mirror=https://mirrors.mit.edu/ubuntu-ports
           else
             archive=https://archive.ubuntu.com/ubuntu
             security=https://security.ubuntu.com/ubuntu
+            mirror=https://mirrors.mit.edu/ubuntu
           fi
-          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
-          {
-            echo "deb [signed-by=$keyring] $archive noble main universe"
-            echo "deb [signed-by=$keyring] $archive noble-updates main universe"
-            echo "deb [signed-by=$keyring] $security noble-security main universe"
-          } > "$sources"
+          export http_proxy="${http_proxy:-${HTTP_PROXY:-}}"
+          export https_proxy="${https_proxy:-${HTTPS_PROXY:-}}"
+          export no_proxy="${no_proxy:-${NO_PROXY:-}}"
+          apt_root=(sudo --preserve-env=http_proxy,https_proxy,no_proxy)
           apt_options=(-o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=-
-            -o Acquire::Retries=2 -o Acquire::https::Timeout=20)
-          sudo apt-get "${apt_options[@]}" update -o APT::Update::Error-Mode=any
-          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
-            ninja-build libgtk-4-dev ffmpeg qpdf desktop-file-utils dpkg-dev rpm cpio
+            -o Acquire::Retries=1 -o Acquire::https::Timeout=15 -o Acquire::Languages=none)
+
+          install_tools() {
+            local archive_url=$1 security_url=$2
+            echo "Checking Ubuntu archive at $archive_url"
+            curl -fsSL --connect-timeout 8 --max-time 12 -o /dev/null \
+              "$archive_url/dists/noble/InRelease" || return
+            curl -fsSL --connect-timeout 8 --max-time 12 -o /dev/null \
+              "$security_url/dists/noble-security/InRelease" || return
+            {
+              echo "deb [signed-by=$keyring] $archive_url noble main universe"
+              echo "deb [signed-by=$keyring] $archive_url noble-updates main universe"
+              echo "deb [signed-by=$keyring] $security_url noble-security main universe"
+            } > "$sources" || return
+            "${apt_root[@]}" timeout --kill-after=5s 100s apt-get "${apt_options[@]}" \
+              update -o APT::Update::Error-Mode=any || return
+            "${apt_root[@]}" apt-get "${apt_options[@]}" install -y --no-install-recommends \
+              ninja-build libgtk-4-dev ffmpeg qpdf desktop-file-utils dpkg-dev rpm cpio
+          }
+
+          if ! install_tools "$archive" "$security" && ! install_tools "$mirror" "$mirror"; then
+            echo "::error::Could not install Linux build dependencies from either signed Ubuntu archive."
+            exit 1
+          fi
       - name: Build and test
         run: |
           cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
