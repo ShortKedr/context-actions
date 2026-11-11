@@ -13,7 +13,7 @@ app="$stage_dir/ContextActions.app"
 plist="$app/Contents/Info.plist"
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")
 identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")
-lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/ContextActions"
+lipo "$app/Contents/MacOS/ContextActions" -verify_arch arm64 x86_64
 codesign --force --sign - "$app"
 codesign --verify --strict --all-architectures "$app"
 

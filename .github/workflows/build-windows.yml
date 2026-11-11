@@ -1,5 +1,10 @@
 name: Windows build
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -40,7 +45,7 @@ jobs:
           key: windows-inputs-${{ hashFiles('dependencies.json', 'src/ui/packages.config') }}
       - name: Build, lightweight tests and installer
         shell: pwsh
-        run: ./scripts/build-and-package.ps1
+        run: ./scripts/build-and-package.ps1 -Release
       - name: Archive the portable app
         shell: pwsh
         run: |
@@ -72,4 +77,45 @@ jobs:
           name: ContextActions-win-x64-reports
           path: |
             dist/reports/
+          if-no-files-found: warn
+  verify-installer:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: ContextActions-win-x64
+          path: dist
+      - name: Verify the installer on the runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem -LiteralPath dist -Filter '*setup.exe'
+          $install = Join-Path $PWD 'build/installer-smoke'
+          $log = Join-Path $PWD 'dist/reports/installer-smoke.log'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
+          $options = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=',
+            ('/DIR="{0}"' -f $install), ('/LOG="{0}"' -f $log))
+          try {
+            $setup = Start-Process -FilePath $installer.FullName -ArgumentList $options -Wait -PassThru -WindowStyle Hidden
+            if ($setup.ExitCode -ne 0) {
+              if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 50 }
+              throw "The installer exited with code $($setup.ExitCode)."
+            }
+            ./scripts/smoke-test.ps1 -AppDirectory $install -ReportDirectory dist/reports/installed
+          } finally {
+            $uninstaller = Join-Path $install 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $result = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru -WindowStyle Hidden
+              if ($result.ExitCode -ne 0) { throw "The uninstaller exited with code $($result.ExitCode)." }
+            }
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Windows-installer-test-reports
+          path: dist/reports/
           if-no-files-found: warn

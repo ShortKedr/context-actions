@@ -1,5 +1,10 @@
 name: Linux build
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 defaults:
@@ -22,9 +27,26 @@ jobs:
         with:
           persist-credentials: false
       - name: Install GTK, media and packaging tools
+        timeout-minutes: 6
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sources="$RUNNER_TEMP/context-actions-ubuntu.list"
+          if [[ $(dpkg --print-architecture) == arm64 ]]; then
+            archive=https://ports.ubuntu.com/ubuntu-ports
+            security=$archive
+          else
+            archive=https://archive.ubuntu.com/ubuntu
+            security=https://security.ubuntu.com/ubuntu
+          fi
+          keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          {
+            echo "deb [signed-by=$keyring] $archive noble main universe"
+            echo "deb [signed-by=$keyring] $archive noble-updates main universe"
+            echo "deb [signed-by=$keyring] $security noble-security main universe"
+          } > "$sources"
+          apt_options=(-o "Dir::Etc::sourcelist=$sources" -o Dir::Etc::sourceparts=-
+            -o Acquire::Retries=2 -o Acquire::https::Timeout=20)
+          sudo apt-get "${apt_options[@]}" update -o APT::Update::Error-Mode=any
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
             ninja-build libgtk-4-dev ffmpeg qpdf desktop-file-utils dpkg-dev rpm cpio
       - name: Build and test
         run: |

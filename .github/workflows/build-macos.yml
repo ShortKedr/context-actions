@@ -1,5 +1,10 @@
 name: macOS universal build
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 defaults:
@@ -31,7 +36,7 @@ jobs:
           (cd dist/macos && shasum -a 256 -c ./*.sha256)
           ditto -x -k dist/macos/*.zip build/macos/archive-check
           app=build/macos/archive-check/ContextActions.app
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/ContextActions"
+          lipo "$app/Contents/MacOS/ContextActions" -verify_arch arm64 x86_64
           codesign --verify --strict --all-architectures "$app"
           sudo installer -pkg dist/macos/*.pkg -target /
           /Applications/ContextActions.app/Contents/MacOS/ContextActions --help

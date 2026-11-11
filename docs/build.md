@@ -6,10 +6,12 @@
 
 Требуются Windows 11 x64, Visual Studio 2022 C++ Build Tools (`v143`), Windows SDK **10.0.22621.0**, CMake **3.25+** и PowerShell 5.1/7. Для native XAML нужны компоненты **C++ WinUI app development build tools** и **Universal Windows Platform build tools**: `Microsoft.VisualStudio.ComponentGroup.UWP.VC.BuildTools` и `Microsoft.VisualStudio.ComponentGroup.UWP.BuildTools`. Скрипты проверяют их наличие, но не устанавливают системные компоненты.
 
-На машине пользователя готового приложения средства сборки не нужны. WinUI 3 собран с `WindowsAppSDKSelfContained=true`: DLL и PRI Windows App SDK находятся рядом с EXE. Приложение использует статический MSVC runtime и системный UCRT Windows 11; FFmpeg, ffprobe и qpdf с его DLL находятся в `engines/`. Переносить нужно всю папку, а не только EXE. Автономный запуск на чистой Windows ещё требует проверки.
+На машине пользователя готового приложения средства сборки не нужны. WinUI 3 собран с `WindowsAppSDKSelfContained=true`: DLL и PRI Windows App SDK находятся рядом с EXE. Приложение использует статический MSVC runtime и системный UCRT Windows 11. Переносите всю папку приложения. Установщик релиза загружает FFmpeg, ffprobe и qpdf из исходных источников, проверяет SHA-256 и устанавливает их в `engines/`. Для установки требуется доступ к сети. Для ZIP установите [FFmpeg](https://ffmpeg.org/download.html#build-windows) и [qpdf](https://github.com/qpdf/qpdf/releases) отдельно и добавьте их каталоги `bin` в `PATH`. Приложение также ищет движки и их DLL в своей папке `engines/`.
 
 ```powershell
 .\scripts\build-and-package.ps1
+# Установщик релиза с загрузкой движков при установке:
+.\scripts\build-and-package.ps1 -Release
 # Только компиляция и быстрый тест ядра:
 .\scripts\build-and-package.ps1 -CompileOnly
 # Полная сборка из уже скачанных проверяемых архивов без сети:
@@ -22,7 +24,7 @@
 
 Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/`, с зафиксированными URL/версиями и SHA-256 в `dependencies.json`; распаковка повторяется из проверенного архива. Девять Microsoft NuGet-пакетов для WinUI зафиксированы в `src/ui/packages.config` и восстанавливаются с nuget.org в `.build-tools/nuget/`. NuGet CLI 6.14.0 также проверяется по SHA-256. Inno Setup берётся как переносимый `Tools.InnoSetup`, не устанавливается в систему.
 
-Пайплайн: CMake/MSVC Release (ядро, shell-DLL, тестовый EXE) → MSBuild native XAML → CTest → комплектование WinUI и движков → короткий headless-тест приложения → MakeAppx sparse identity → Inno Setup LZMA2 → отчёт и SHA-256. `-SkipTests` пропускает CTest и headless-тест; `test-status.json` явно фиксирует отсутствие проверки. UI-тест не запускается автоматически. Ни один шаг не запускает установщик, shell-регистрацию, Office или Проводник. Тестовые файлы, настройки и временные файлы находятся внутри `build/`.
+Пайплайн: CMake/MSVC Release (ядро, shell-DLL, тестовый EXE) → MSBuild native XAML → CTest → короткий headless-тест приложения → MakeAppx sparse identity → Inno Setup LZMA2 → отчёт и SHA-256. `-SkipTests` пропускает CTest и headless-тест. В GitHub Actions дополнительно запускается установщик, проверяется установленное приложение и выполняется удаление. UI, Office и регистрация в Explorer проверяются отдельно.
 
 Для отдельной проверки интерфейса запустите `./scripts/ui-smoke-test.ps1 -AppPath ./dist/ContextActions/ContextActions.exe` в интерактивном сеансе Windows. Скрипт открывает приложение и проверяет выбор файлов, переименование и отмену, переходы между режимами окна, валидацию и диагностику ошибок.
 
@@ -107,3 +109,14 @@ DEB устанавливается через `apt install ./<имя-пакет�
 ## GitHub Actions
 
 Три workflow собирают приложение и установщик при push, pull request и ручном запуске. Артефакты и SHA-256 доступны в результатах workflow. Windows собирается для x64, macOS получает один универсальный пакет для обеих архитектур, Linux собирается отдельно для amd64 и arm64.
+
+## Выпуск версии
+
+Обновите номер версии в `CMakeLists.txt` и `dependencies.json`. После публикации коммита в `main` отправьте соответствующий тег, например `v0.1.0`.
+
+```bash
+git tag -a v0.1.0 -m "Context Actions v0.1.0"
+git push origin v0.1.0
+```
+
+Workflow **Release** проверяет тег и запускает сборки Windows, macOS и Linux для этого коммита. После успешных проверок он сверяет контрольные суммы, прикрепляет приложения и установщики к черновику GitHub Release и публикует его. Раздел **Changes** формируется из коммитов после предыдущего опубликованного тега, а первый выпуск включает историю до своего тега. После сбоя можно повторно запустить workflow для того же тега, если исходный коммит менять не нужно.

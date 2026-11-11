@@ -1,0 +1,115 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: version
+        name: Verify the tag and package versions
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! $TAG =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected a release tag in vMAJOR.MINOR.PATCH format." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          version=${TAG#v}
+          test "$(sed -nE 's/^project\(ContextActions VERSION ([^ ]+) .*/\1/p' CMakeLists.txt)" = "$version"
+          test "$(jq -r .version dependencies.json)" = "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: validate
+    uses: ./.github/workflows/build-windows.yml
+
+  macos:
+    needs: validate
+    uses: ./.github/workflows/build-macos.yml
+
+  linux:
+    needs: validate
+    uses: ./.github/workflows/build-linux.yml
+
+  publish:
+    needs: [validate, windows, macos, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ContextActions-*
+          path: downloaded
+      - name: Verify and collect release assets
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: bash scripts/prepare-release.sh "$VERSION" downloaded release-assets
+      - name: Publish release and commit changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          verify_assets() {
+            gh release view "$TAG" --json assets --jq '.assets[] | select(.state == "uploaded") | .name' > uploaded.txt
+            diff -u <(ls -1 release-assets | sort) <(sort uploaded.txt)
+          }
+
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft); then
+            if [[ $draft == false ]]; then
+              verify_assets
+              exit 0
+            fi
+          else
+            previous=''
+            published=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')
+            while IFS= read -r candidate; do
+              if [[ -n $candidate && $candidate != "$TAG" ]] &&
+                  git merge-base --is-ancestor "refs/tags/$candidate" HEAD; then
+                previous=$candidate
+                break
+              fi
+            done <<< "$published"
+            range=HEAD
+            if [[ -n $previous ]]; then
+              range="refs/tags/$previous..HEAD"
+            fi
+            {
+              echo '## Downloads'
+              echo
+              echo '- **Windows x64** uses the setup EXE or portable ZIP. Setup downloads verified FFmpeg and qpdf archives. The portable app uses FFmpeg, ffprobe, and qpdf from PATH or its engines folder.'
+              echo '- **macOS** uses the universal PKG or ZIP on Intel and Apple Silicon. The installer is an unsigned preview. Install the media tools separately with `brew install ffmpeg-full qpdf`.'
+              echo '- **Linux** uses the DEB, RPM or tar archive for x86-64 or ARM64.'
+              echo '- **SHA-256** checksums are in `SHA256SUMS.txt`.'
+              echo
+              echo '## Changes'
+              echo
+              git log --no-merges --format='- %s (%h)' "$range"
+            } > release-notes.md
+            gh release create "$TAG" --verify-tag --draft --title "Context Actions $TAG" --notes-file release-notes.md
+          fi
+
+          gh release upload "$TAG" release-assets/* --clobber
+          verify_assets
+          gh release edit "$TAG" --verify-tag --draft=false

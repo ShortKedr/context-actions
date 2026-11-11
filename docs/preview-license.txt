@@ -1,10 +1,10 @@
-Context Actions 0.1 - local preview
+Context Actions 0.1 preview
 
-This is a development build for local evaluation, not a public release.
 The application keeps source files intact, except for explicitly requested renames.
 See docs/support.md for supported conversions and limitations.
 
-The package includes unmodified FFmpeg (GPLv3) and qpdf (Apache-2.0)
-binaries and their accompanying notices under licenses/.
+Setup installs unmodified FFmpeg (GPLv3) and qpdf (Apache-2.0)
+with their accompanying notices under licenses/. The online installer
+downloads them from the GyanD FFmpeg and qpdf GitHub releases.
 Third-party components retain their respective licenses and copyrights.
 Context Actions source code is licensed under MIT. See docs/LICENSE.

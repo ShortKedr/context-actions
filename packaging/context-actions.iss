@@ -40,11 +40,61 @@ Name: "shell"; Description: "File Explorer context menus (local preview; require
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef DownloadEngines
+Source: "{tmp}\{#FFmpegRoot}\bin\ffmpeg.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFmpegBytes}; Flags: external ignoreversion
+Source: "{tmp}\{#FFmpegRoot}\bin\ffprobe.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFprobeBytes}; Flags: external ignoreversion
+Source: "{tmp}\{#FFmpegRoot}\*"; DestDir: "{app}\licenses\ffmpeg"; ExternalSize: {#FFmpegNoticeBytes}; Flags: external ignoreversion
+Source: "{tmp}\{#QpdfRoot}\bin\qpdf.exe"; DestDir: "{app}\engines"; ExternalSize: {#QpdfBytes}; Flags: external ignoreversion
+Source: "{tmp}\{#QpdfRoot}\bin\*.dll"; DestDir: "{app}\engines"; ExternalSize: {#QpdfLibraryBytes}; Flags: external ignoreversion
+Source: "{tmp}\{#QpdfRoot}\share\*"; DestDir: "{app}\licenses\qpdf\share"; ExternalSize: {#QpdfNoticeBytes}; Flags: external ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Icons]
 Name: "{autoprograms}\Context Actions"; Filename: "{app}\ContextActions.exe"
 
 [Code]
+#ifdef DownloadEngines
+var
+  MediaToolsPage: TDownloadWizardPage;
+
+procedure InitializeWizard();
+begin
+  MediaToolsPage := CreateDownloadPage('Downloading media tools',
+    'Setup downloads FFmpeg and qpdf from their publishers and checks their SHA-256 hashes.', nil);
+end;
+
+procedure UnpackMediaTools(const ArchiveName: String);
+var TempDir: String; Code: Integer;
+begin
+  TempDir := ExpandConstant('{tmp}');
+  if not Exec(ExpandConstant('{sys}\tar.exe'), '-xf "' + TempDir + '\' + ArchiveName +
+    '" -C "' + TempDir + '"', TempDir, SW_HIDE, ewWaitUntilTerminated, Code) then
+    RaiseException('Windows tar could not start: ' + SysErrorMessage(Code));
+  if Code <> 0 then
+    RaiseException('Windows tar could not extract ' + ArchiveName + ' (exit code ' + IntToStr(Code) + ').');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  MediaToolsPage.Clear;
+  MediaToolsPage.Add('{#FFmpegUrl}', 'ffmpeg.zip', '{#FFmpegHash}');
+  MediaToolsPage.Add('{#QpdfUrl}', 'qpdf.zip', '{#QpdfHash}');
+  MediaToolsPage.Show;
+  try
+    try
+      MediaToolsPage.Download;
+      UnpackMediaTools('ffmpeg.zip');
+      UnpackMediaTools('qpdf.zip');
+    except
+      Result := 'Setup could not prepare the media tools. ' + GetExceptionMessage;
+    end;
+  finally
+    MediaToolsPage.Hide;
+  end;
+end;
+#endif
+
 function ShellRegistration(const Mode: String): Boolean;
 var Code: Integer; Arguments: String;
 begin

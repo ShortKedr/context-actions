@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$CompileOnly, [switch]$Offline, [switch]$SkipTests)
+param([switch]$CompileOnly, [switch]$Offline, [switch]$SkipTests, [switch]$Release)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -116,18 +116,46 @@ try {
     }
     Invoke-Tool $sdk @('pack','/d',$identity,'/p',(Join-Path $stage 'packaging\ContextActions.msix'),'/o','/nv')
     Copy-Item -LiteralPath $identity -Destination (Join-Path $stage 'packaging\development') -Recurse
+    $installerArgs = @('/Q',"/DStageDir=$stage","/DOutputDir=$(Join-Path $root 'dist')","/DAppVersion=$($config.version)")
+    $downloadedPayloadBytes = 0
+    if ($Release) {
+        $ffmpegNotices = @(Get-ChildItem -LiteralPath (Join-Path $licenses 'ffmpeg') -File)
+        $qpdfNotices = @(Get-ChildItem -LiteralPath (Join-Path $licenses 'qpdf\share') -File -Recurse)
+        $qpdfLibraries = @(Get-ChildItem -LiteralPath $engines -Filter '*.dll' -File)
+        $ffmpegBytes = (Get-Item -LiteralPath (Join-Path $engines 'ffmpeg.exe')).Length
+        $ffprobeBytes = (Get-Item -LiteralPath (Join-Path $engines 'ffprobe.exe')).Length
+        $qpdfBytes = (Get-Item -LiteralPath (Join-Path $engines 'qpdf.exe')).Length
+        $ffmpegNoticeBytes = ($ffmpegNotices | Measure-Object -Property Length -Sum).Sum
+        $qpdfNoticeBytes = ($qpdfNotices | Measure-Object -Property Length -Sum).Sum
+        $qpdfLibraryBytes = ($qpdfLibraries | Measure-Object -Property Length -Sum).Sum
+        $downloadedPayloadBytes = $ffmpegBytes + $ffprobeBytes + $qpdfBytes + $ffmpegNoticeBytes + $qpdfNoticeBytes + $qpdfLibraryBytes
+        $installerArgs += @(
+            '/DDownloadEngines',
+            "/DFFmpegUrl=$($config.ffmpeg.url)", "/DFFmpegHash=$($config.ffmpeg.sha256)", "/DFFmpegRoot=$($config.ffmpeg.root)",
+            "/DQpdfUrl=$($config.qpdf.url)", "/DQpdfHash=$($config.qpdf.sha256)", "/DQpdfRoot=$($config.qpdf.root)",
+            "/DFFmpegBytes=$ffmpegBytes", "/DFFprobeBytes=$ffprobeBytes", "/DFFmpegNoticeBytes=$ffmpegNoticeBytes",
+            "/DQpdfBytes=$qpdfBytes", "/DQpdfLibraryBytes=$qpdfLibraryBytes", "/DQpdfNoticeBytes=$qpdfNoticeBytes"
+        )
+        foreach ($directory in @($engines,(Join-Path $licenses 'ffmpeg'),(Join-Path $licenses 'qpdf'))) {
+            $resolved = (Resolve-Path -LiteralPath $directory).ProviderPath
+            if ($resolved -ne $directory -or -not $resolved.StartsWith(($stage + '\'),[StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusing to remove $resolved from the release stage"
+            }
+            Remove-Item -LiteralPath $resolved -Recurse -Force
+        }
+    }
     $inventory = @(Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object {
         $relative = $_.FullName.Substring($stage.Length + 1)
         $component = if ($relative -match 'ffmpeg|ffprobe') { 'FFmpeg' } elseif ($relative.StartsWith('engines\') -or $relative.StartsWith('licenses\qpdf\')) { 'qpdf and runtime' } elseif ($relative.StartsWith('licenses\windows-app-sdk\') -or ($uiFiles.ContainsKey($relative) -and $relative -notmatch '^(ContextActions\.|App\.xbf$|MainWindow\.xbf$)')) { 'Windows App SDK' } else { 'Context Actions' }
         [pscustomobject]@{ path=$relative; component=$component; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     })
     $inventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $reports 'components.json') -Encoding utf8
-    $toolchain = [ordered]@{ cmake=(& $cmake --version | Select-Object -First 1); visualStudio=$vs; sdk=$config.toolchain.sdk; uiBackend='WinUI 3 / C++/WinRT'; windowsAppSdkSelfContained=$true; uiPackages=$uiPackages; dependencies=$config }
+    $toolchain = [ordered]@{ cmake=(& $cmake --version | Select-Object -First 1); visualStudio=$vs; sdk=$config.toolchain.sdk; uiBackend='WinUI 3 / C++/WinRT'; windowsAppSdkSelfContained=$true; uiPackages=$uiPackages; dependencies=$config; releaseInstallerDownloadsEngines=[bool]$Release }
     $toolchain | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $reports 'build-inputs.json') -Encoding utf8
-    Invoke-Tool (Join-Path $inno 'ISCC.exe') @('/Q',"/DStageDir=$stage","/DOutputDir=$(Join-Path $root 'dist')","/DAppVersion=$($config.version)",'packaging\context-actions.iss')
+    Invoke-Tool (Join-Path $inno 'ISCC.exe') ($installerArgs + 'packaging\context-actions.iss')
     $installerBytes = (Get-Item -LiteralPath $installer).Length
-    $installedBytes = ($inventory | Measure-Object -Property bytes -Sum).Sum
-    $size = [ordered]@{ version=$config.version; installerBytes=$installerBytes; installedPayloadBytes=$installedBytes; installerMB=[math]::Round($installerBytes/1000000,2); installedPayloadMB=[math]::Round($installedBytes/1000000,2); installerMiB=[math]::Round($installerBytes/1MB,2); installedPayloadMiB=[math]::Round($installedBytes/1MB,2); targetMB=100; limitMB=300; withinLimit=($installerBytes -le 300000000); shellTested=$false; officeTested=$false }
+    $installedBytes = ($inventory | Measure-Object -Property bytes -Sum).Sum + $downloadedPayloadBytes
+    $size = [ordered]@{ version=$config.version; installerBytes=$installerBytes; installedPayloadBytes=$installedBytes; downloadedPayloadBytes=$downloadedPayloadBytes; installerMB=[math]::Round($installerBytes/1000000,2); installedPayloadMB=[math]::Round($installedBytes/1000000,2); installerMiB=[math]::Round($installerBytes/1MB,2); installedPayloadMiB=[math]::Round($installedBytes/1MB,2); targetMB=100; limitMB=300; withinLimit=($installerBytes -le 300000000); shellTested=$false; officeTested=$false }
     $size | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reports 'size.json') -Encoding utf8
     $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
     "$hash  $([IO.Path]::GetFileName($installer))" | Set-Content -LiteralPath "$installer.sha256" -Encoding ascii

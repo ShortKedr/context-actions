@@ -2,6 +2,7 @@
 #include "../platform.h"
 #include <algorithm>
 #include <cwctype>
+#include <sstream>
 
 namespace ca {
 namespace {
@@ -98,9 +99,24 @@ fs::path dataDirectory() {
 }
 
 fs::path engine(const char* name) {
-    const auto path = appDirectory() / L"engines" / (wide(name) + L".exe");
-    if (!fs::is_regular_file(path)) fail(tr("engine") + pathText(path));
-    return path;
+    const auto filename = wide(name) + L".exe";
+    const auto bundled = appDirectory() / L"engines" / filename;
+    if (fs::is_regular_file(bundled)) return bundled;
+
+    wchar_t searchPath[32768]{};
+    const auto length = GetEnvironmentVariableW(L"PATH", searchPath, std::size(searchPath));
+    if (length && length < std::size(searchPath)) {
+        std::wistringstream directories(searchPath);
+        std::wstring directory;
+        while (std::getline(directories, directory, L';')) {
+            if (directory.size() >= 2 && directory.front() == L'"' && directory.back() == L'"')
+                directory = directory.substr(1, directory.size() - 2);
+            const fs::path path(directory);
+            std::error_code error;
+            if (path.is_absolute() && fs::is_regular_file(path / filename, error)) return path / filename;
+        }
+    }
+    fail(tr("systemEngine") + filename);
 }
 std::wstring readLanguageSetting() {
     wchar_t value[LOCALE_NAME_MAX_LENGTH]{};
