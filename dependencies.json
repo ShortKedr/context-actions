@@ -3,17 +3,17 @@
   "architecture": "x64",
   "toolchain": {"generator": "Visual Studio 17 2022", "toolset": "v143", "sdk": "10.0.22621.0", "cmakeMinimum": "3.25"},
   "ffmpeg": {
-    "version": "8.0.1",
-    "url": "https://github.com/GyanD/codexffmpeg/releases/download/8.0.1/ffmpeg-8.0.1-full_build.zip",
-    "sha256": "467cde100a47ed4b03a897988aeb4a296890c1e2b2d2864204657d002bc5fb90",
-    "root": "ffmpeg-8.0.1-full_build",
+    "version": "9.0.2",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build.zip",
+    "sha256": "759d0a9831c436a0eb331ad36f236c06cb04aaa0005da46571f0e9d3d9206f6b",
+    "root": "ffmpeg-9.0.2-full_build",
     "license": "GPL-3.0-or-later"
   },
   "qpdf": {
-    "version": "12.4.1",
-    "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.1/qpdf-12.4.1-mingw64.zip",
-    "sha256": "6a47eeddc8ff712a6e003314daae25569402c6e904ba82b7b9181d7b0301b689",
-    "root": "qpdf-12.4.1-mingw64",
+    "version": "12.4.2",
+    "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-mingw64.zip",
+    "sha256": "773d2fa0c7d161e2271430734338e560a07b25d0edf11ceee8e53de435012766",
+    "root": "qpdf-12.4.2-mingw64",
     "license": "Apache-2.0; see bundled dependency notices"
   },
   "inno": {

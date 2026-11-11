@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Ensure native XAML build tools are installed
@@ -37,12 +37,10 @@ jobs:
             $ready = & $vswhere -latest -version $version -requires $components -property installationPath
             if (-not $ready) { throw 'The native XAML build components are missing after setup.' }
           }
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: |
-            .build-tools/downloads
-            .build-tools/nuget
-          key: windows-inputs-${{ hashFiles('dependencies.json', 'src/ui/packages.config') }}
+          path: .build-tools/downloads
+          key: windows-verified-inputs-${{ hashFiles('dependencies.json', 'src/ui/packages.config', 'scripts/build-ui.ps1') }}
       - name: Build, lightweight tests and installer
         shell: pwsh
         run: ./scripts/build-and-package.ps1 -Release
@@ -55,7 +53,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
           "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-win-x64-app
           path: |
@@ -63,7 +61,7 @@ jobs:
             dist/ContextActions-win-x64.zip.sha256
           compression-level: 0
           if-no-files-found: error
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-win-x64
           path: |
@@ -71,21 +69,25 @@ jobs:
             dist/*setup.exe.sha256
           compression-level: 0
           if-no-files-found: error
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: ContextActions-win-x64-reports
           path: |
-            dist/reports/
+            dist/reports/application-smoke.txt
+            dist/reports/build-inputs.json
+            dist/reports/components.json
+            dist/reports/size.json
+            dist/reports/test-status.json
           if-no-files-found: warn
   verify-installer:
     needs: build
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ContextActions-win-x64
           path: dist
@@ -102,7 +104,6 @@ jobs:
           try {
             $setup = Start-Process -FilePath $installer.FullName -ArgumentList $options -Wait -PassThru -WindowStyle Hidden
             if ($setup.ExitCode -ne 0) {
-              if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 50 }
               throw "The installer exited with code $($setup.ExitCode)."
             }
             ./scripts/smoke-test.ps1 -AppDirectory $install -ReportDirectory dist/reports/installed
@@ -113,9 +114,9 @@ jobs:
               if ($result.ExitCode -ne 0) { throw "The uninstaller exited with code $($result.ExitCode)." }
             }
           }
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: Windows-installer-test-reports
-          path: dist/reports/
+          path: dist/reports/installed/application-smoke.txt
           if-no-files-found: warn

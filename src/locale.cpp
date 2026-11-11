@@ -123,7 +123,7 @@ std::wstring language() {
 }
 void setLanguage(const std::wstring& value) {
     std::lock_guard lock(localeMutex);
-    fs::create_directories(dataDirectory());
+    ensurePrivateDirectory(dataDirectory());
     writeLanguageSetting(value);
     selectedLanguage = value;
 }

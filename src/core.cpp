@@ -30,7 +30,7 @@ void replaceAll(std::wstring& value, const std::wstring& from, const std::wstrin
 struct Temporary {
     fs::path path;
     explicit Temporary(const fs::path& parent) : path(parent / textPath(L".context-actions-" + randomId())) {
-        if (!fs::create_directory(path)) fail(tr("conflict") + pathText(path));
+        createPrivateDirectory(path);
     }
     ~Temporary() { std::error_code ec; fs::remove_all(path, ec); }
 };
@@ -163,7 +163,10 @@ Options readJob(const fs::path& path) {
     return o;
 }
 fs::path writeJob(const Options& o) {
-    const auto directory = dataDirectory()/"jobs"; fs::create_directories(directory);
+    const auto state = dataDirectory();
+    ensurePrivateDirectory(state);
+    const auto directory = state / "jobs";
+    ensurePrivateDirectory(directory);
     const auto path=directory/textPath(randomId()+L".caj"); saveOptions(o,path); return path;
 }
 void consumeJob(const fs::path& path) {
@@ -238,9 +241,15 @@ void applyRenameLocked(const std::vector<Rename>& changes, std::atomic_bool& can
     if(saveUndo) {
         Temporary scratch(state);
         const auto prepared = scratch.path / "journal";
-        std::ofstream log(prepared,std::ios::binary);
-        for(const auto& c:changes) log<<std::quoted(utf8(pathText(c.from)))<<' '<<std::quoted(utf8(pathText(c.to)))<<' '<<fs::file_size(c.from)<<' '<<fileStamp(c.from)<<'\n';
-        log.close(); if(!log) fail(tr("failed"));
+        auto log = openNewPrivateFile(prepared);
+        for (const auto& change : changes) {
+            std::ostringstream entry;
+            entry << std::quoted(utf8(pathText(change.from))) << ' ' << std::quoted(utf8(pathText(change.to)))
+                  << ' ' << fs::file_size(change.from) << ' ' << fileStamp(change.from) << '\n';
+            const auto line = entry.str();
+            if (!entry || std::fwrite(line.data(), 1, line.size(), log.get()) != line.size()) fail(tr("failed"));
+        }
+        if (std::fclose(log.release()) != 0) fail(tr("failed"));
         moveFile(prepared,pending);
     }
     size_t moved=0;
@@ -267,15 +276,18 @@ void applyRenameLocked(const std::vector<Rename>& changes, std::atomic_bool& can
 
 void applyRename(const std::vector<Rename>& changes, std::atomic_bool& cancel, bool saveUndo) {
     const auto state = dataDirectory();
-    fs::create_directories(state);
+    ensurePrivateDirectory(state);
     withRenameLock(state / "rename.lock", [&] { applyRenameLocked(changes, cancel, saveUndo, state); });
 }
 
 void undoRename(std::atomic_bool& cancel) {
     const auto state = dataDirectory();
     if (!fs::is_directory(state)) fail(tr("invalid"));
+    ensurePrivateDirectory(state);
     withRenameLock(state / "rename.lock", [&] {
         const auto journal=state/"rename-undo.txt";
+        if (!fs::is_regular_file(fs::symlink_status(journal)) || fs::hard_link_count(journal) != 1)
+            fail(tr("invalid"));
         std::ifstream file(journal,std::ios::binary);
         if(!file) fail(tr("invalid"));
         std::vector<Rename> reverse;

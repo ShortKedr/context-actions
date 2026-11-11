@@ -32,6 +32,6 @@ Standalone format conversion for documents and spreadsheets is planned. The cata
 | Save conversions | Choose the source folder or an output folder. Conversions leave source files intact. If an output name already exists, the app adds `(2)`, `(3)`, and so on. It writes to a temporary folder beside the destination and moves the verified output into place without overwriting an existing file. |
 | Review or cancel a batch | Conversions run in sequence with overall progress and per-file status. An individual conversion failure leaves the remaining files queued. After a successful conversion, open the result or show it in the platform file manager. Canceling an FFmpeg or qpdf job stops the processes started for that job and removes its temporary files. |
 
-For scripted processing, use `--headless` with `--report`. Exit code `0` means success, `1` means error, and `2` means cancellation. The same format limits and source-file protections apply.
+For scripted processing, use `--headless` with `--report` and a new report filename. The app refuses to overwrite an existing report. Errors go to standard error if no report can be created. Reports may contain absolute paths and diagnostics. Exit code `0` means success, `1` means error, and `2` means cancellation.
 
 The app uses shared English, Russian, German, French, and Simplified Chinese translations with an English fallback. macOS and Linux follow the system language. Windows also offers language and theme controls and a localized File Explorer menu.

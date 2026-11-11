@@ -45,6 +45,7 @@
   <PropertyGroup>
     <OutDir>$(MSBuildThisFileDirectory)..\..\build\winui\</OutDir>
     <IntDir>$(MSBuildThisFileDirectory)..\..\build\winui-obj\</IntDir>
+    <RepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</RepositoryRoot>
     <GeneratedFilesDir>$(IntDir)Generated Files\</GeneratedFilesDir>
     <AppxPriInitialPath></AppxPriInitialPath>
   </PropertyGroup>
@@ -55,7 +56,7 @@
       <WarningLevel>Level4</WarningLevel>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /bigobj /d1trimfile:"$(RepositoryRoot)" %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>NDEBUG;UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;DISABLE_XAML_GENERATED_MAIN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -63,7 +64,7 @@
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>$(MSBuildThisFileDirectory)..\..\build\Release\actions_core.lib;ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;uuid.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>libucrt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <AdditionalOptions>/defaultlib:ucrt.lib %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/defaultlib:ucrt.lib /PDBALTPATH:ContextActions.pdb %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

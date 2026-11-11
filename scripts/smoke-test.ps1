@@ -14,7 +14,7 @@ function Check([bool]$Value,[string]$Message) { if (-not $Value) { throw $Messag
 function Native([string]$File,[string[]]$Arguments) { & $File @Arguments; Check ($LASTEXITCODE -eq 0) "$File failed with $LASTEXITCODE" }
 function App([string]$Action,[string]$Folder,[string[]]$Files,[string[]]$Options = @(),[int]$ExpectedExit = 0) {
     $output = Join-Path $testDirectory $Folder
-    $report = Join-Path $testDirectory "$Folder.txt"
+    $report = Join-Path $testDirectory "$Folder-$([guid]::NewGuid().ToString('N')).txt"
     $arguments = @('--headless','--report',$report,'--action',$Action,'--output',$output) + $Options + @('--') + $Files
     # '&' waits for Win32 GUI applications when called from a script. No console or UI is displayed.
     & $application @arguments | Out-Null

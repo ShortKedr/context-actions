@@ -78,7 +78,8 @@ void exportOfficePdf(const fs::path& input,const fs::path& output,bool excel,std
             Variant(input.wstring()),Variant(0L),Variant(true),Variant::missing(),Variant(std::wstring(L"ContextActions-no-password")),
             Variant::missing(),Variant(true),Variant::missing(),Variant::missing(),Variant(false),Variant(false),Variant::missing(),Variant(false)}));
         if(cancel)throw Cancelled();
-        invoke(session.document.Get(),L"ExportAsFixedFormat",DISPATCH_METHOD,{Variant(0L),Variant(output.wstring()),Variant(0L),Variant(true),Variant(false)});
+        // IncludeDocProperties is false so the PDF omits workbook properties.
+        invoke(session.document.Get(),L"ExportAsFixedFormat",DISPATCH_METHOD,{Variant(0L),Variant(output.wstring()),Variant(0L),Variant(false),Variant(false)});
     } else {
         session.wordOptions=dispatch(invoke(session.app.Get(),L"Options",DISPATCH_PROPERTYGET));
         auto previous=invoke(session.wordOptions.Get(),L"UpdateLinksAtOpen",DISPATCH_PROPERTYGET);

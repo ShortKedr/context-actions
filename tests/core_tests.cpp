@@ -11,11 +11,22 @@
 #include <thread>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 
 namespace {
 void expect(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 template<class F>void rejects(F fn){bool rejected=false;try{fn();}catch(const std::exception&){rejected=true;}expect(rejected,"Expected rejection");}
 void write(const ca::fs::path& file,const char* data){std::ofstream out(file,std::ios::binary);out<<data;}
+std::string read(const ca::fs::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+#ifndef _WIN32
+bool isPrivate(const ca::fs::path& path) {
+    using ca::fs::perms;
+    return (ca::fs::status(path).permissions() & (perms::group_all | perms::others_all)) == perms::none;
+}
+#endif
 }
 int runTests(const ca::fs::path& self, const ca::fs::path& root) {
     try {
@@ -27,8 +38,13 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
 #else
         setenv("CONTEXT_ACTIONS_DATA_DIR", state.c_str(), 1);
         auto scratch = root / std::to_string(getpid());
+        ca::fs::create_directories(state);
+        ca::fs::permissions(state, ca::fs::perms::owner_all | ca::fs::perms::group_read | ca::fs::perms::group_exec);
 #endif
         ca::setLanguage(L"en");
+#ifndef _WIN32
+        expect(isPrivate(state), "Existing POSIX state directory becomes private");
+#endif
         ca::fs::create_directories(scratch);
         expect(ca::kind(ca::textPath(L"Кино.MKV"))==ca::Kind::video,"File classification");
         expect(ca::accepts(ca::Action::h264,{L"a.mp4",L"b.mov"}),"Video batch");
@@ -61,9 +77,54 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         ca::Options missing;missing.action=ca::Action::image;missing.files={scratch/L"missing.png"};std::vector<ca::Update> updates;
         auto failed=ca::execute(missing,cancel,[&](auto const& update){updates.push_back(update);});
         expect(failed.failed==1&&updates.size()==1&&updates[0].failed&&updates[0].status.find(L"missing.png")!=std::wstring::npos,"Typed failure preserves diagnostic details");
+        ca::CommandLine report;
+        report.headless = true;
+        report.options = options;
+        report.report = options.files[0];
+        rejects([&] { ca::runCommandLine(report); });
+        expect(read(options.files[0]) == "original", "A report cannot truncate an input");
+#ifndef _WIN32
+        report.report = scratch / "linked-report.txt";
+        ca::fs::create_hard_link(options.files[0], report.report);
+        rejects([&] { ca::runCommandLine(report); });
+        expect(read(options.files[0]) == "original", "A report cannot truncate a hard-linked input");
+        report.report = scratch / "symlink-report.txt";
+        ca::fs::create_symlink(options.files[0], report.report);
+        rejects([&] { ca::runCommandLine(report); });
+        expect(read(options.files[0]) == "original", "A report cannot truncate a symlink target");
+#endif
+        report.options = missing;
+        report.report = scratch / "new-report.txt";
+        expect(ca::runCommandLine(report) == 1 && read(report.report).find("failed=1") != std::string::npos,
+               "New report records conversion failure");
+#ifndef _WIN32
+        expect(isPrivate(report.report), "POSIX report is private");
+        auto image = missing;
+        image.files = {scratch / "image.png"};
+        write(image.files.front(), "image fixture");
+        bool checkedScratch = false;
+        const auto imageResult = ca::execute(image, cancel, [&](const ca::Update&) {
+            if (checkedScratch) return;
+            for (const auto& item : ca::fs::directory_iterator(scratch)) {
+                if (item.path().filename().native().starts_with(".context-actions-")) {
+                    expect(isPrivate(item.path()), "POSIX conversion scratch directory is private");
+                    checkedScratch = true;
+                }
+            }
+            throw ca::Cancelled();
+        });
+        expect(imageResult.cancelled && checkedScratch, "Conversion scratch permissions checked before processing");
+#endif
+        const auto previousReport = read(report.report);
+        rejects([&] { ca::runCommandLine(report); });
+        expect(read(report.report) == previousReport, "An existing report is preserved");
         cancel=true;updates.clear();auto stopped=ca::execute(missing,cancel,[&](auto const& update){updates.push_back(update);});
         expect(stopped.cancelled&&updates.size()==1&&!updates[0].failed,"Cancellation is not an error detail");cancel=false;
-        ca::applyRename(changes,cancel);expect(ca::fs::exists(changes[0].to),"Rename executed");ca::undoRename(cancel);expect(ca::fs::exists(options.files[0]),"Rename undo");
+        ca::applyRename(changes,cancel);expect(ca::fs::exists(changes[0].to),"Rename executed");
+#ifndef _WIN32
+        expect(isPrivate(state / "rename-undo.txt"), "POSIX rename journal is private");
+#endif
+        ca::undoRename(cancel);expect(ca::fs::exists(options.files[0]),"Rename undo");
         options.pattern=L"target";rejects([&]{ca::previewRename(options);});options.pattern=L"../escape";rejects([&]{ca::previewRename(options);});options.pattern=L"CON";rejects([&]{ca::previewRename(options);});
         ca::resetOfficeCapabilities();expect(ca::officeCapability(true)==ca::officeCapability(false),"Office starts with the same capabilities");const auto sheets=ca::officeCapability(true);ca::setOfficeCapability(false,ca::Capability::unavailable);expect(ca::officeCapability(true)==sheets,"Independent spreadsheet PDF capability");expect(!ca::unavailableReason(ca::Action::word,{L"a.docx"}).empty(),"Missing Office shown");
         for(auto lang:{L"en",L"ru",L"de",L"fr",L"zh-CN"}){ca::setLanguage(lang);for(auto a:ca::catalog())expect(ca::trAction(a)!=ca::actionId(a),"Action localization");}

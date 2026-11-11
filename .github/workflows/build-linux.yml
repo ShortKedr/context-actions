@@ -23,7 +23,7 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Install GTK, media and packaging tools
@@ -75,7 +75,7 @@ jobs:
           rpm2cpio dist/linux/*.rpm | (cd build/linux/rpm-check && cpio -id)
           build/linux/rpm-check/usr/bin/context-actions --help
           desktop-file-validate build/linux/rpm-check/usr/share/applications/io.github.ShortKedr.ContextActions.desktop
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-linux-${{ matrix.arch }}-app
           path: |
@@ -83,7 +83,7 @@ jobs:
             dist/linux/*.tar.gz.sha256
           compression-level: 0
           if-no-files-found: error
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-linux-${{ matrix.arch }}-installers
           path: |

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <sstream>
+#include <system_error>
 
 namespace ca {
 namespace {
@@ -96,6 +97,19 @@ fs::path dataDirectory() {
     if (GetEnvironmentVariableW(L"CONTEXT_ACTIONS_DATA_DIR", value, 32768)) return fs::path(value);
     if (!GetEnvironmentVariableW(L"LOCALAPPDATA", value, 32768)) throw std::runtime_error("LOCALAPPDATA is unavailable");
     return fs::path(value) / L"Context Actions";
+}
+
+void createPrivateDirectory(const fs::path& path) {
+    if (!fs::create_directory(path)) fail(tr("conflict") + pathText(path));
+}
+
+void ensurePrivateDirectory(const fs::path& path) { fs::create_directories(path); }
+
+File openNewPrivateFile(const fs::path& path) {
+    std::FILE* file = nullptr;
+    if (const auto error = _wfopen_s(&file, path.c_str(), L"wbxN"))
+        throw fs::filesystem_error("Create new file", path, std::error_code(error, std::generic_category()));
+    return File(file);
 }
 
 fs::path engine(const char* name) {

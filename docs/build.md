@@ -22,7 +22,7 @@
 .\scripts\build-ui.ps1 -Offline
 ```
 
-Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/`, с зафиксированными URL/версиями и SHA-256 в `dependencies.json`; распаковка повторяется из проверенного архива. Девять Microsoft NuGet-пакетов для WinUI зафиксированы в `src/ui/packages.config` и восстанавливаются с nuget.org в `.build-tools/nuget/`. NuGet CLI 6.14.0 также проверяется по SHA-256. Inno Setup берётся как переносимый `Tools.InnoSetup`, не устанавливается в систему.
+Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/` по URL из `dependencies.json` и проверяются по SHA-256 перед распаковкой. WinUI-пакеты с nuget.org зафиксированы по версиям в `src/ui/packages.config` и по SHA-256 в `scripts/build-ui.ps1`. Каждая сборка заново распаковывает проверенные пакеты в `.build-tools/nuget/`. Inno Setup используется как переносимый пакет `Tools.InnoSetup`.
 
 Пайплайн: CMake/MSVC Release (ядро, shell-DLL, тестовый EXE) → MSBuild native XAML → CTest → короткий headless-тест приложения → MakeAppx sparse identity → Inno Setup LZMA2 → отчёт и SHA-256. `-SkipTests` пропускает CTest и headless-тест. В GitHub Actions дополнительно запускается установщик, проверяется установленное приложение и выполняется удаление. UI, Office и регистрация в Explorer проверяются отдельно.
 
@@ -63,7 +63,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\register-she
 
 Один набор выбранных файлов передаётся одним бинарным `.caj` в локальной папке `jobs/`; в командной строке только путь к заданию. Командные строки движков передаются через `CreateProcessW`, без CMD/PowerShell-интерполяции имён файлов. В пользовательском сценарии терминал не появляется.
 
-Программный запуск приложения:
+Программный запуск приложения с новым именем файла для отчёта:
 
 ```powershell
 .\dist\ContextActions\ContextActions.exe --headless --report .\build\result.txt --action h264 --output .\build\converted -- 'C:\Videos\пример.mp4'

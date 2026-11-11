@@ -21,9 +21,27 @@ function Invoke-Tool([string]$File, [string[]]$Arguments) {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$File exited with code $LASTEXITCODE" }
 }
+function Assert-PublicBinary([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $ascii = [Text.Encoding]::GetEncoding(28591).GetString($bytes)
+    $strings = @($ascii, [Text.Encoding]::Unicode.GetString($bytes))
+    if ($bytes.Length -gt 1) {
+        $strings += [Text.Encoding]::Unicode.GetString($bytes,1,$bytes.Length-1)
+    }
+    foreach ($directory in @($root,$env:USERPROFILE) | Where-Object { $_ }) {
+        foreach ($value in $strings) {
+            if ($value.Replace('/','\').IndexOf($directory,[StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw "Build path found in $([IO.Path]::GetFileName($Path))."
+            }
+        }
+    }
+    if ($ascii -match '(?is)RSDS.{20}(?:[A-Z]:[\\/]|\\\\)[^\x00]{1,1024}\.pdb\x00') {
+        throw "Absolute PDB path found in $([IO.Path]::GetFileName($Path))."
+    }
+}
 function Get-Dependency([string]$Name) {
     $dependency = $config.$Name
-    $archive = if ($Name -eq 'ffmpeg') { "$($dependency.root).zip" } else { "$Name.zip" }
+    $archive = if ($Name -eq 'inno') { 'inno.zip' } else { "$($dependency.root).zip" }
     $zip = Join-Path $cache "downloads\$archive"
     $directory = Join-Path $cache $Name
     if (-not (Test-Path -LiteralPath $zip)) {
@@ -52,8 +70,9 @@ try {
     $testStatus = [ordered]@{ core='not run'; shellContract='not run'; application='not run'; ui='not run'; shell='not run'; office='not run'; skipTests=[bool]$SkipTests }
     $testStatus | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reports 'test-status.json') -Encoding utf8
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if (-not $vs) { throw 'Install Visual Studio 2022 Build Tools with C++ and Windows SDK 10.0.22621.0.' }
+    $installation = @(& $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)
+    if ($LASTEXITCODE -ne 0 -or $installation.Count -ne 1) { throw 'Install Visual Studio 2022 Build Tools with C++ and Windows SDK 10.0.22621.0.' }
+    $vs = $installation[0].installationPath
     $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
     if (-not (Test-Path -LiteralPath $cmake)) { $cmake = (Get-Command cmake -ErrorAction Stop).Source }
     $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
@@ -79,6 +98,9 @@ try {
         $destination = Join-Path $stage $relative
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $destination
+    }
+    foreach ($name in @('ContextActions.exe','ContextActionsShell.dll')) {
+        Assert-PublicBinary (Join-Path $stage $name)
     }
     $engines = Join-Path $stage 'engines'; $licenses = Join-Path $stage 'licenses'
     New-Item -ItemType Directory -Force -Path $engines,(Join-Path $licenses 'ffmpeg'),(Join-Path $licenses 'qpdf'),(Join-Path $stage 'packaging') | Out-Null
@@ -150,7 +172,7 @@ try {
         [pscustomobject]@{ path=$relative; component=$component; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     })
     $inventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $reports 'components.json') -Encoding utf8
-    $toolchain = [ordered]@{ cmake=(& $cmake --version | Select-Object -First 1); visualStudio=$vs; sdk=$config.toolchain.sdk; uiBackend='WinUI 3 / C++/WinRT'; windowsAppSdkSelfContained=$true; uiPackages=$uiPackages; dependencies=$config; releaseInstallerDownloadsEngines=[bool]$Release }
+    $toolchain = [ordered]@{ cmake=(& $cmake --version | Select-Object -First 1); visualStudioVersion=$installation[0].installationVersion; sdk=$config.toolchain.sdk; uiBackend='WinUI 3 / C++/WinRT'; windowsAppSdkSelfContained=$true; uiPackages=$uiPackages; dependencies=$config; releaseInstallerDownloadsEngines=[bool]$Release }
     $toolchain | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $reports 'build-inputs.json') -Encoding utf8
     Invoke-Tool (Join-Path $inno 'ISCC.exe') ($installerArgs + 'packaging\context-actions.iss')
     $installerBytes = (Get-Item -LiteralPath $installer).Length

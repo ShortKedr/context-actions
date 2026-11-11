@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -84,6 +85,23 @@ fs::path homeDirectory() {
 bool executable(const fs::path& path) {
     std::error_code error;
     return fs::is_regular_file(path, error) && access(path.c_str(), X_OK) == 0;
+}
+
+void protectPrivateMode(int descriptor, mode_t allowed) {
+    struct stat info{};
+    require(fstat(descriptor, &info) == -1 ? errno : 0, "Inspect private path");
+    if (info.st_uid != geteuid()) throw std::runtime_error("Private path belongs to another user.");
+    if (info.st_mode & 0777 & ~allowed) {
+        require(fchmod(descriptor, info.st_mode & allowed) == -1 ? errno : 0, "Set private permissions");
+        require(fstat(descriptor, &info) == -1 ? errno : 0, "Check private permissions");
+        if (info.st_mode & 0777 & ~allowed) throw std::runtime_error("The filesystem does not support private permissions.");
+    }
+}
+
+void protectPrivateDirectory(const fs::path& path) {
+    const Descriptor directory{open(path.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    require(directory.value == -1 ? errno : 0, "Open private directory");
+    protectPrivateMode(directory.value, 0700);
 }
 }
 
@@ -169,10 +187,52 @@ fs::path dataDirectory() {
 #endif
 }
 
+void createPrivateDirectory(const fs::path& path) {
+    if (mkdir(path.c_str(), 0700) == -1)
+        throw fs::filesystem_error("Create private directory", path, std::error_code(errno, std::generic_category()));
+    try {
+        protectPrivateDirectory(path);
+    } catch (...) {
+        rmdir(path.c_str());
+        throw;
+    }
+}
+
+void ensurePrivateDirectory(const fs::path& requested) {
+    const auto path = requested.filename().empty() && requested.has_relative_path() ? requested.parent_path() : requested;
+    if (path.filename().empty() || path.filename() == "." || path.filename() == "..")
+        throw std::runtime_error("State requires a dedicated directory.");
+    if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
+    const bool created = mkdir(path.c_str(), 0700) == 0;
+    if (!created && errno != EEXIST)
+        throw fs::filesystem_error("Create private directory", path, std::error_code(errno, std::generic_category()));
+    try {
+        protectPrivateDirectory(path);
+    } catch (...) {
+        if (created) rmdir(path.c_str());
+        throw;
+    }
+}
+
+File openNewPrivateFile(const fs::path& path) {
+    Descriptor descriptor{open(path.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600)};
+    if (descriptor.value == -1)
+        throw fs::filesystem_error("Create new file", path, std::error_code(errno, std::generic_category()));
+    protectPrivateMode(descriptor.value, 0600);
+    auto* file = fdopen(descriptor.value, "wb");
+    if (!file) throw fs::filesystem_error("Open new file stream", path, std::error_code(errno, std::generic_category()));
+    descriptor.value = -1; // The stream owns the descriptor now.
+    return File(file);
+}
+
 std::wstring readLanguageSetting() {
     std::string value;
-    std::ifstream settings(dataDirectory() / "language");
-    if (std::getline(settings, value) && !value.empty()) return wide(value);
+    const auto path = dataDirectory() / "language";
+    std::error_code error;
+    if (fs::is_regular_file(fs::symlink_status(path, error))) {
+        std::ifstream settings(path);
+        if (std::getline(settings, value) && !value.empty()) return wide(value);
+    }
 #ifdef __APPLE__
     const auto preferred = CFLocaleCopyPreferredLanguages();
     char language[128]{};
@@ -192,7 +252,11 @@ std::wstring readLanguageSetting() {
 }
 
 void writeLanguageSetting(const std::wstring& value) {
-    std::ofstream settings(dataDirectory() / "language", std::ios::trunc);
+    const auto path = dataDirectory() / "language";
+    const auto status = fs::symlink_status(path);
+    if (fs::exists(status) && (!fs::is_regular_file(status) || fs::hard_link_count(path) != 1))
+        throw std::runtime_error("Invalid language settings file.");
+    std::ofstream settings(path, std::ios::trunc);
     settings << utf8(value) << '\n';
     settings.close();
     if (!settings) throw std::runtime_error("Cannot save the language preference.");
@@ -231,8 +295,12 @@ void moveFile(const fs::path& from, const fs::path& to, bool replace) {
 }
 
 void withRenameLock(const fs::path& file, const std::function<void()>& operation) {
-    const Descriptor lock{open(file.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600)};
+    const Descriptor lock{open(file.c_str(), O_CREAT | O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600)};
     require(lock.value == -1 ? errno : 0, "Open rename lock");
+    struct stat info{};
+    require(fstat(lock.value, &info) == -1 ? errno : 0, "Inspect rename lock");
+    if (!S_ISREG(info.st_mode) || info.st_uid != geteuid() || info.st_nlink != 1)
+        throw std::runtime_error("Invalid rename lock file.");
     if (flock(lock.value, LOCK_EX | LOCK_NB) == -1) {
         const int error = errno;
         if (error == EWOULDBLOCK) throw std::runtime_error(utf8(tr("renameBusy")));
