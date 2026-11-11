@@ -21,7 +21,8 @@ run() {
 }
 
 ffmpeg -hide_banner -loglevel error -nostdin -f lavfi -i 'color=s=96x64:r=12:d=1' \
-    -c:v libx264 -pix_fmt yuv420p "$video"
+    -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=1' \
+    -c:v libx264 -pix_fmt yuv420p -c:a aac "$video"
 ffmpeg -hide_banner -loglevel error -nostdin -i "$video" -frames:v 1 -threads 1 "$image"
 
 run h264 --action h264 --width 64 --mute -- "$video"
@@ -30,6 +31,28 @@ test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,wid
     -of csv=p=0 "$work/Café & 100%_h264.mp4")" = h264,64
 test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name \
     -of csv=p=0 "$work/Café & 100%_h265.mp4")" = hevc
+
+run extract-audio --action audio --format flac -- "$video"
+audio="$work/Café & 100%_audio.flac"
+test "$(ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$audio")" = flac
+run convert-audio --action audio -- "$audio"
+test "$(ffprobe -v error -show_entries stream=codec_name \
+    -of csv=p=0 "$work/Café & 100%_audio_audio.mp3")" = mp3
+
+run remux --action remux -- "$video"
+remuxed="$work/Café & 100%_remux.mkv"
+test "$(ffprobe -v error -show_entries format=format_name -of default=nw=1:nk=1 "$remuxed")" = matroska,webm
+source_streams="$(ffmpeg -v error -nostdin -i "$video" -map 0 -c copy -f streamhash -)"
+output_streams="$(ffmpeg -v error -nostdin -i "$remuxed" -map 0 -c copy -f streamhash -)"
+test "$source_streams" = "$output_streams"
+
+run frame --action frame -- "$video"
+test "$(ffprobe -v error -show_entries stream=codec_name,width,height \
+    -of csv=p=0 "$work/Café & 100%_frame.png")" = png,96,64
+run media-info --action media-info -- "$video"
+info="$work/Café & 100%_media-info.txt"
+grep -qx 'codec_name=h264' "$info"
+grep -qx 'codec_name=aac' "$info"
 
 run image --action image --format webp -- "$image"
 test -s "$work/Кадр & 100%_image.webp"
@@ -46,4 +69,4 @@ run rename --action rename --pattern '{name}_{n}' -- "$document"
 test ! -e "$document"
 test -s "$work/Notes & 100%_1.txt"
 
-echo "Headless media, PDF assembly and rename checks passed. Reports are in $work"
+echo "Headless video, audio, remux, frame, media info, image, PDF and rename checks passed. Reports are in $work"

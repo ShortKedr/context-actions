@@ -10,8 +10,8 @@
 
 namespace ca {
 namespace fs = std::filesystem;
-enum class Kind { other, video, image, pdf, document, sheet };
-enum class Action { more, compress, h264, h265, telegram, image, pdf, rename, word, excel, documents, sheets };
+enum class Kind { other, video, image, pdf, document, sheet, audio };
+enum class Action { more, compress, h264, h265, telegram, image, pdf, rename, word, excel, documents, sheets, audio, remux, frame, mediaInfo };
 enum class Capability { unknown, available, unavailable };
 struct Options {
     Action action = Action::more;
@@ -19,7 +19,7 @@ struct Options {
     fs::path output;
     int quality = 24, width = 0, fps = 0, targetMB = 0;
     bool mute = false, firstFrame = false;
-    std::wstring format = L"png", pattern = L"{name}_{n}", prefix, suffix, find, replace;
+    std::wstring format, pattern = L"{name}_{n}", prefix, suffix, find, replace;
     int start = 1;
 };
 struct Update { size_t index; double progress; std::wstring status; fs::path output; bool failed = false; };
@@ -53,6 +53,8 @@ Action parseAction(const std::wstring& value);
 const char* actionKey(Action action);
 std::wstring trAction(Action action);
 std::vector<Action> catalog();
+std::vector<std::wstring> outputFormats(Action action);
+std::wstring outputFormat(const Options& options);
 bool accepts(Action action, const std::vector<fs::path>& files);
 std::wstring unavailableReason(Action action, const std::vector<fs::path>& files);
 void validate(const Options& options);

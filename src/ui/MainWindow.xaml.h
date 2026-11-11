@@ -25,6 +25,7 @@ private:
     void RefreshFiles(bool reset=true);
     void RefreshActions(bool selectBest);
     void ActionChanged();
+    Microsoft::UI::Xaml::Controls::ComboBox FormatPicker(ca::Action action);
     void ReadOptions();
     void ValidateOptions();
     void ChooseFiles(bool folder);

@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <iterator>
 #include <map>
 #include <mutex>
 #include <numeric>
@@ -15,7 +14,6 @@
 namespace {
 using ca::Action;
 constexpr auto applicationId = "io.github.ShortKedr.ContextActions";
-constexpr const char* imageFormats[] = {"png", "jpg", "webp", "bmp", "tiff", "gif", nullptr};
 
 std::string label(const char* key) {
     return ca::utf8(ca::tr(key));
@@ -229,18 +227,19 @@ private:
 
         media_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
         gtk_box_append(GTK_BOX(controls_), media_);
-        format_ = gtk_drop_down_new_from_strings(imageFormats);
-        const auto formatsEnd = std::end(imageFormats) - 1;
-        auto initialFormat = std::find_if(std::begin(imageFormats), formatsEnd, [&](const char* value) {
-            return initial_.format == ca::wide(value);
-        });
-        if (initialFormat != formatsEnd)
-            gtk_drop_down_set_selected(GTK_DROP_DOWN(format_), static_cast<guint>(initialFormat - std::begin(imageFormats)));
+        format_ = gtk_drop_down_new(nullptr, nullptr);
+        if (!initial_.format.empty()) {
+            ca::Options formatOptions = initial_;
+            formatOptions.action = selectedAction();
+            formatSelections_[formatOptions.action] = ca::outputFormat(formatOptions);
+        }
         formatField_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
         field(formatField_, "format", format_);
         gtk_box_append(GTK_BOX(media_), formatField_);
-        quality_ = spin(media_, "quality", initial_.quality, 51);
-        width_ = spin(media_, "width", initial_.width, 16384);
+        dimensions_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+        gtk_box_append(GTK_BOX(media_), dimensions_);
+        quality_ = spin(dimensions_, "quality", initial_.quality, 51);
+        width_ = spin(dimensions_, "width", initial_.width, 16384);
 
         video_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
         gtk_box_append(GTK_BOX(controls_), video_);
@@ -320,7 +319,8 @@ private:
     }
 
     Action suggestedAction() const {
-        for (auto action : {Action::compress, Action::image, Action::pdf, Action::word, Action::excel})
+        for (auto action : {Action::compress, Action::audio, Action::image, Action::pdf, Action::word,
+                Action::excel, Action::mediaInfo})
             if (ca::accepts(action, files_)) return action;
         return files_.empty() ? Action::compress : Action::rename;
     }
@@ -334,14 +334,34 @@ private:
     void refreshControls() {
         const auto action = selectedAction();
         const bool video = isVideo(action);
+        const bool image = action == Action::image;
         const bool rename = action == Action::rename;
+        if (action != formatAction_) {
+            const auto previous = gtk_drop_down_get_selected(GTK_DROP_DOWN(format_));
+            if (previous < formats_.size()) formatSelections_[formatAction_] = formats_[previous];
+            formatAction_ = action;
+            formats_ = ca::outputFormats(action);
+            auto* names = gtk_string_list_new(nullptr);
+            for (const auto& format : formats_) gtk_string_list_append(names, ca::utf8(format).c_str());
+            gtk_drop_down_set_model(GTK_DROP_DOWN(format_), G_LIST_MODEL(names));
+            g_object_unref(names);
+            const auto preferred = formatSelections_.find(action);
+            guint selected = 0;
+            if (preferred != formatSelections_.end()) {
+                const auto found = std::find(formats_.begin(), formats_.end(), preferred->second);
+                if (found != formats_.end())
+                    selected = static_cast<guint>(found - formats_.begin());
+            }
+            if (!formats_.empty()) gtk_drop_down_set_selected(GTK_DROP_DOWN(format_), selected);
+        }
         const auto reason = ca::unavailableReason(action, files_);
         setText(availability_, ca::utf8(reason));
         gtk_widget_set_visible(availability_, !reason.empty());
-        gtk_widget_set_visible(media_, video || action == Action::image);
+        gtk_widget_set_visible(media_, video || image || !formats_.empty());
+        gtk_widget_set_visible(dimensions_, video || image);
         gtk_widget_set_visible(video_, video);
-        gtk_widget_set_visible(formatField_, action == Action::image);
-        gtk_widget_set_visible(frame_, action == Action::image || action == Action::pdf);
+        gtk_widget_set_visible(formatField_, !formats_.empty());
+        gtk_widget_set_visible(frame_, image || action == Action::pdf);
         gtk_widget_set_visible(rename_, rename);
         gtk_widget_set_visible(destination_, !rename);
         gtk_widget_set_sensitive(add_, !busy_);
@@ -512,7 +532,7 @@ private:
         result.mute = checked(mute_);
         result.firstFrame = checked(frame_);
         const auto formatIndex = gtk_drop_down_get_selected(GTK_DROP_DOWN(format_));
-        if (formatIndex < std::size(imageFormats) - 1) result.format = ca::wide(imageFormats[formatIndex]);
+        if (formatIndex < formats_.size()) result.format = formats_[formatIndex];
         result.pattern = text(pattern_);
         result.start = number(start_);
         result.prefix = text(prefix_);
@@ -686,11 +706,14 @@ private:
     ca::fs::path chosenOutput_;
     bool immediate_;
     std::vector<Action> actions_;
+    Action formatAction_ = Action::more;
+    std::vector<std::wstring> formats_;
+    std::map<Action, std::wstring> formatSelections_;
     GtkWindow* window_ = nullptr;
     GtkFileChooserNative* chooser_ = nullptr;
     GtkWidget *fileList_ = nullptr, *add_ = nullptr, *remove_ = nullptr, *up_ = nullptr, *down_ = nullptr;
     GtkWidget *controls_ = nullptr, *action_ = nullptr, *availability_ = nullptr, *media_ = nullptr;
-    GtkWidget *formatField_ = nullptr, *format_ = nullptr, *quality_ = nullptr, *width_ = nullptr;
+    GtkWidget *formatField_ = nullptr, *format_ = nullptr, *dimensions_ = nullptr, *quality_ = nullptr, *width_ = nullptr;
     GtkWidget *video_ = nullptr, *fps_ = nullptr, *target_ = nullptr, *mute_ = nullptr, *frame_ = nullptr;
     GtkWidget *rename_ = nullptr, *pattern_ = nullptr, *start_ = nullptr, *prefix_ = nullptr;
     GtkWidget *suffix_ = nullptr, *find_ = nullptr, *replace_ = nullptr, *previewButton_ = nullptr;

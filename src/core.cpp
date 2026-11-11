@@ -60,7 +60,9 @@ double probeDuration(const fs::path& input, std::atomic_bool& cancel) {
 }
 void imageConversion(const Options& options, const fs::path& source, const fs::path& output, std::atomic_bool& cancel) {
     std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",L"-i",pathText(source)};
-    auto filter = options.width ? L"scale=w='min(iw," + std::to_wstring(options.width) + L")':h=-1:flags=lanczos" : L"null";
+    if (options.action == Action::frame) args.insert(args.end(), {L"-map",L"0:V:0"});
+    auto filter = options.action != Action::frame && options.width
+        ? L"scale=w='min(iw," + std::to_wstring(options.width) + L")':h=-1:flags=lanczos" : L"null";
     auto ext = lower(pathText(output.extension()));
     if (ext == L".jpg" || ext == L".jpeg" || ext == L".bmp") {
         filter += L",format=rgba,split[fg][bg];[bg]lutrgb=r=255:g=255:b=255,format=rgb24[white];[white][fg]overlay=shortest=1:format=auto,format=rgb24";
@@ -73,11 +75,48 @@ void imageConversion(const Options& options, const fs::path& source, const fs::p
     engineSuccess(runProcess(engine("ffmpeg"), args, cancel));
     engineSuccess(runProcess(engine("ffmpeg"), {L"-v",L"error",L"-nostdin",L"-i",pathText(output),L"-frames:v",L"1",L"-f",L"null",L"-"}, cancel, {}, 60000));
 }
+
+std::vector<std::wstring> audioOutputArguments(const std::wstring& format) {
+    if (format == L"mp3") return {L"-c:a",L"libmp3lame",L"-q:a",L"2"};
+    if (format == L"m4a") return {L"-c:a",L"aac",L"-b:a",L"192k"};
+    if (format == L"wav") return {L"-c:a",L"pcm_s16le"};
+    if (format == L"flac") return {L"-c:a",L"flac"};
+    return {L"-c:a",L"libopus",L"-b:a",L"128k"};
+}
+
+void mediaReport(const fs::path& source, const fs::path& output, std::atomic_bool& cancel) {
+    std::ofstream report(output, std::ios::binary);
+    report << utf8(tr("media-info") + L"\n" + pathText(source.filename()) + L"\n\n");
+    if (!report) fail(tr("failed"));
+    const auto probe = runProcess(engine("ffprobe"), {
+        L"-v",L"error",L"-pretty",L"-show_entries",
+        L"format=format_name,format_long_name,duration,size,bit_rate:"
+        L"stream=index,codec_type,codec_name,profile,width,height,avg_frame_rate,pix_fmt,"
+        L"color_space,color_transfer,color_primaries,sample_rate,channels,channel_layout:"
+        L"stream_tags=language:chapter=start_time,end_time",
+        pathText(source)
+    }, cancel, [&](const std::string& chunk) { report << chunk; }, 60000);
+    engineSuccess(probe);
+    if (probe.output.empty()) fail(tr("failed"));
+    report.close();
+    if (!report) fail(tr("failed"));
+}
+
+std::wstring outputExtension(const Options& options) {
+    switch (options.action) {
+    case Action::image: case Action::audio: case Action::remux: return L"." + outputFormat(options);
+    case Action::pdf: case Action::word: case Action::excel: return L".pdf";
+    case Action::frame: return L".png";
+    case Action::mediaInfo: return L".txt";
+    default: return L".mp4";
+    }
+}
 }
 
 Kind kind(const fs::path& path) {
     const auto ext = lower(pathText(path.extension()));
     if (contains(L"|.mp4|.mkv|.mov|.avi|.webm|.m4v|.wmv|.mts|.m2ts|",ext)) return Kind::video;
+    if (contains(L"|.mp3|.m4a|.aac|.wav|.flac|.ogg|.oga|.opus|.aif|.aiff|.wma|",ext)) return Kind::audio;
     if (contains(L"|.jpg|.jpeg|.png|.webp|.bmp|.tif|.tiff|.gif|",ext)) return Kind::image;
     if (ext == L".pdf") return Kind::pdf;
     if (contains(L"|.docx|.doc|.odt|.rtf|.txt|",ext)) return Kind::document;
@@ -85,7 +124,7 @@ Kind kind(const fs::path& path) {
     return Kind::other;
 }
 const char* actionKey(Action a) {
-    static const char* keys[]{"more","compress","h264","h265","telegram","image","pdf","rename","word","excel","documents","sheets"};
+    static const char* keys[]{"more","compress","h264","h265","telegram","image","pdf","rename","word","excel","documents","sheets","audio","remux","frame","media-info"};
     const auto i = static_cast<size_t>(a);
     if (i >= std::size(keys)) fail(tr("invalid"));
     return keys[i];
@@ -96,17 +135,36 @@ std::wstring trAction(Action action) {
     return tr(actionKey(action));
 }
 Action parseAction(const std::wstring& value) {
-    for (int i=0;i<=static_cast<int>(Action::sheets);++i) if (actionId(static_cast<Action>(i)) == value) return static_cast<Action>(i);
+    for (int i=0;i<=static_cast<int>(Action::mediaInfo);++i) if (actionId(static_cast<Action>(i)) == value) return static_cast<Action>(i);
     fail(tr("invalid"));
 }
-std::vector<Action> catalog() { return {Action::compress,Action::h264,Action::h265,Action::telegram,Action::image,Action::pdf,Action::rename,Action::word,Action::excel,Action::documents,Action::sheets}; }
+std::vector<Action> catalog() {
+    return {Action::compress,Action::h264,Action::h265,Action::telegram,Action::image,Action::pdf,
+        Action::audio,Action::remux,Action::frame,Action::mediaInfo,Action::rename,Action::word,Action::excel,Action::documents,Action::sheets};
+}
+std::vector<std::wstring> outputFormats(Action action) {
+    switch (action) {
+    case Action::image: return {L"png",L"jpg",L"webp",L"bmp",L"tiff",L"gif"};
+    case Action::audio: return {L"mp3",L"m4a",L"wav",L"flac",L"opus"};
+    case Action::remux: return {L"mkv",L"mp4",L"mov"};
+    default: return {};
+    }
+}
+std::wstring outputFormat(const Options& options) {
+    if (!options.format.empty()) return lower(options.format);
+    const auto formats = outputFormats(options.action);
+    return formats.empty() ? std::wstring{} : formats.front();
+}
 bool accepts(Action action, const std::vector<fs::path>& files) {
     if (action == Action::more) return true;
     if (files.empty()) return false;
     return std::all_of(files.begin(),files.end(),[action](const auto& file) {
         auto k = kind(file);
         switch(action) {
-        case Action::compress: case Action::h264: case Action::h265: case Action::telegram: return k == Kind::video;
+        case Action::compress: case Action::h264: case Action::h265: case Action::telegram:
+        case Action::remux: case Action::frame: return k == Kind::video;
+        case Action::audio: return k == Kind::audio || k == Kind::video;
+        case Action::mediaInfo: return k == Kind::audio || k == Kind::video || k == Kind::image;
         case Action::image: return k == Kind::image;
         case Action::pdf: return k == Kind::image || k == Kind::pdf;
         case Action::rename: return true;
@@ -135,7 +193,8 @@ void validate(const Options& o) {
     if(o.action==Action::rename||o.action==Action::pdf)
         for (const auto& path : o.files) if (!fs::is_regular_file(path)) fail(tr("missing")+pathText(path));
     if (o.action!=Action::rename && !o.output.empty() && fs::exists(o.output) && !fs::is_directory(o.output)) fail(tr("invalid"));
-    if (o.action == Action::image && !contains(L"|png|jpg|webp|bmp|tiff|gif|",lower(o.format))) fail(tr("invalid"));
+    const auto formats = outputFormats(o.action);
+    if (!formats.empty() && std::find(formats.begin(),formats.end(),outputFormat(o)) == formats.end()) fail(tr("invalid"));
     if (o.action == Action::image || o.action == Action::pdf) {
         for (const auto& path : o.files)
             if (!o.firstFrame && contains(L"|.gif|.tif|.tiff|.webp|",lower(pathText(path.extension())))) fail(tr("frameRequired"));
@@ -319,6 +378,7 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
         for(size_t i=0;i<changes.size();++i) {result.outputs.push_back(changes[i].to);if(notify)notify({i,1,tr("done"),changes[i].to});++result.succeeded;}
         return result;
     }
+    const auto extension = outputExtension(o);
     const size_t count=o.action==Action::pdf?1:o.files.size();
     for(size_t i=0;i<count;++i) {
         try {
@@ -327,7 +387,6 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
             if(!fs::is_regular_file(source))fail(tr("missing")+pathText(source));
             const auto directory=o.output.empty()?source.parent_path():fs::absolute(o.output); fs::create_directories(directory);
             Temporary scratch(directory);
-            auto extension=o.action==Action::image?L"."+o.format:(o.action==Action::pdf||o.action==Action::word||o.action==Action::excel?L".pdf":L".mp4");
             auto output=uniqueOutput(directory,pathText(source.stem())+L"_"+actionId(o.action),extension);
             auto temporary=scratch.path/textPath(L"result"+extension);
             if(notify)notify({i,0,tr("working"),{}});
@@ -368,21 +427,40 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                     arguments = {L"@" + pathText(response)};
                 }
                 engineSuccess(runProcess(engine("qpdf"), arguments, cancel));
-            } else if(o.action==Action::image) imageConversion(o,source,temporary,cancel);
+            } else if(o.action==Action::image||o.action==Action::frame) imageConversion(o,source,temporary,cancel);
+            else if(o.action==Action::mediaInfo) mediaReport(source,temporary,cancel);
             else if(o.action==Action::word||o.action==Action::excel) exportOfficePdf(source,temporary,o.action==Action::excel,cancel);
             else {
-                auto duration=probeDuration(source,cancel); std::string pending;
-                for(int attempt=0;attempt<4;++attempt) {
-                    if(fs::exists(temporary))fs::remove(temporary);
-                    engineSuccess(runProcess(engine("ffmpeg"),videoArguments(o,source,temporary,duration,attempt),cancel,[&](const std::string& chunk) {
+                const auto duration=probeDuration(source,cancel);
+                const auto convert = [&](const std::vector<std::wstring>& arguments) {
+                    std::string pending;
+                    engineSuccess(runProcess(engine("ffmpeg"),arguments,cancel,[&](const std::string& chunk) {
                         pending+=chunk; size_t end;
                         while((end=pending.find('\n'))!=std::string::npos) {
                             const auto line=pending.substr(0,end);pending.erase(0,end+1);
                             if(line.starts_with("out_time_us=")&&duration>0&&notify) { try {notify({i,std::clamp(std::stod(line.substr(12))/1000000.0/duration,0.0,0.99),tr("working"),{}});}catch(const std::invalid_argument&){} }
                         }
                     }));
-                    if(!o.targetMB||fs::file_size(temporary)<=static_cast<uintmax_t>(o.targetMB)*1048576)break;
-                    if(attempt==3)fail(tr("sizeFailed"));
+                };
+                if (o.action == Action::audio || o.action == Action::remux) {
+                    std::vector<std::wstring> arguments{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",
+                        L"-xerror",L"-progress",L"pipe:1",L"-i",pathText(source)};
+                    if (o.action == Action::audio) {
+                        arguments.insert(arguments.end(), {L"-map",L"0:a:0"});
+                        const auto encoding = audioOutputArguments(outputFormat(o));
+                        arguments.insert(arguments.end(), encoding.begin(), encoding.end());
+                    } else {
+                        arguments.insert(arguments.end(), {L"-map",L"0",L"-c",L"copy"});
+                    }
+                    arguments.push_back(pathText(temporary));
+                    convert(arguments);
+                } else {
+                    for(int attempt=0;attempt<4;++attempt) {
+                        if(fs::exists(temporary))fs::remove(temporary);
+                        convert(videoArguments(o,source,temporary,duration,attempt));
+                        if(!o.targetMB||fs::file_size(temporary)<=static_cast<uintmax_t>(o.targetMB)*1048576)break;
+                        if(attempt==3)fail(tr("sizeFailed"));
+                    }
                 }
                 if(probeDuration(temporary,cancel)<=0) fail(tr("failed"));
             }

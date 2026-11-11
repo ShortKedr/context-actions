@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <map>
 #include <thread>
 
 namespace {
@@ -105,6 +106,8 @@ void showError(NSWindow* window, NSString* message) {
 @implementation Workspace {
     ca::Options _options;
     std::vector<ca::Action> _actions;
+    ca::Action _formatAction;
+    std::map<ca::Action, std::wstring> _formatSelections;
     std::vector<ca::Rename> _preview;
     std::vector<ca::fs::path> _pendingFiles, _outputs;
     std::vector<std::wstring> _statuses;
@@ -123,7 +126,7 @@ void showError(NSWindow* window, NSString* message) {
     NSButton *_run, *_stop, *_open, *_reveal;
     NSGridView* _form;
     NSIndexSet *_videoRows, *_imageRows, *_renameRows;
-    NSInteger _firstFrameRow, _outputRow;
+    NSInteger _formatRow, _firstFrameRow, _outputRow;
     NSTextField *_availability, *_summary;
     NSProgressIndicator* _progress;
 }
@@ -138,6 +141,11 @@ void showError(NSWindow* window, NSString* message) {
 
     _options = options;
     _actions = ca::catalog();
+    _formatAction = ca::Action::more;
+    if (!options.format.empty()) {
+        const auto action = options.action == ca::Action::more ? ca::Action::image : options.action;
+        _formatSelections[action] = ca::outputFormat(options);
+    }
     window.delegate = self;
     window.title = @"Context Actions";
     window.contentMinSize = NSMakeSize(880, 540);
@@ -208,8 +216,6 @@ void showError(NSWindow* window, NSString* message) {
     _imageQuality = [self field:std::to_wstring(_options.quality)];
     _imageWidth = [self field:std::to_wstring(_options.width)];
     _format = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
-    [_format addItemsWithTitles:@[@"png", @"jpg", @"webp", @"bmp", @"tiff", @"gif"]];
-    [_format selectItemWithTitle:text(_options.format)];
     _firstFrame = [NSButton checkboxWithTitle:label("firstFrame") target:nil action:NULL];
     _firstFrame.state = _options.firstFrame ? NSControlStateValueOn : NSControlStateValueOff;
 
@@ -248,8 +254,9 @@ void showError(NSWindow* window, NSString* message) {
     spanningRow(_mute);
     _videoRows = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(begin, rows.count - begin)];
 
-    begin = rows.count;
+    _formatRow = rows.count;
     addRow("format", _format);
+    begin = rows.count;
     addRow("width", _imageWidth);
     addRow("imageQuality", _imageQuality);
     _imageRows = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(begin, rows.count - begin)];
@@ -337,9 +344,23 @@ void showError(NSWindow* window, NSString* message) {
     const bool image = action == ca::Action::image;
     const bool rename = action == ca::Action::rename;
     const bool chosen = action != ca::Action::more;
+    if (action != _formatAction) {
+        if (NSString* previous = _format.titleOfSelectedItem) _formatSelections[_formatAction] = value(previous);
+        _formatAction = action;
+        [_format removeAllItems];
+        for (const auto& format : ca::outputFormats(action)) [_format addItemWithTitle:text(format)];
+        if (_format.numberOfItems > 0) {
+            [_format selectItemAtIndex:0];
+            const auto preferred = _formatSelections.find(action);
+            if (preferred != _formatSelections.end()) {
+                if (NSMenuItem* item = [_format itemWithTitle:text(preferred->second)]) [_format selectItem:item];
+            }
+        }
+    }
     [_videoRows enumerateIndexesUsingBlock:^(NSUInteger index, BOOL*) { [self->_form rowAtIndex:index].hidden = !video; }];
     [_imageRows enumerateIndexesUsingBlock:^(NSUInteger index, BOOL*) { [self->_form rowAtIndex:index].hidden = !image; }];
     [_renameRows enumerateIndexesUsingBlock:^(NSUInteger index, BOOL*) { [self->_form rowAtIndex:index].hidden = !rename; }];
+    [_form rowAtIndex:_formatRow].hidden = _format.numberOfItems == 0;
     [_form rowAtIndex:_firstFrameRow].hidden = !image && action != ca::Action::pdf;
     [_form rowAtIndex:_outputRow].hidden = !chosen || rename;
 
@@ -509,8 +530,8 @@ void showError(NSWindow* window, NSString* message) {
         job.targetMB = integer(_target, "target");
         job.mute = _mute.state == NSControlStateValueOn;
     }
+    if (_format.numberOfItems > 0) job.format = value(_format.titleOfSelectedItem);
     if (job.action == ca::Action::image) {
-        job.format = value(_format.titleOfSelectedItem);
         job.quality = integer(_imageQuality, "imageQuality");
         job.width = integer(_imageWidth, "width");
     }

@@ -39,7 +39,7 @@ int wmain(int argc,wchar_t** argv){
                 expect(commands.emplace(action,command).second,"Unique command identifiers");ca::check(command->GetFlags(&flags));expect(flags==ECF_DEFAULT,"Leaf command flag");
                 ca::check(command->GetTitle(nullptr,&title));std::wstring text=title;CoTaskMemFree(title);expect(!text.empty(),"Localized command title");
             }
-            expect(commands.size()==10&&!commands.contains(ca::Action::documents)&&!commands.contains(ca::Action::sheets),"Supported commands only, including More");
+            expect(commands.size()==14&&!commands.contains(ca::Action::documents)&&!commands.contains(ca::Action::sheets),"Supported commands only, including More");
             ca::check(enumeration->Reset());ca::check(enumeration->Skip(1));ca::ComPtr<IEnumExplorerCommand> clone;ca::check(enumeration->Clone(&clone));
             ca::ComPtr<IExplorerCommand> originalNext,cloneNext;ca::check(enumeration->Next(1,&originalNext,nullptr));ca::check(clone->Next(1,&cloneNext,nullptr));
             GUID first{},second{};ca::check(originalNext->GetCanonicalName(&first));ca::check(cloneNext->GetCanonicalName(&second));expect(first==second,"Clone preserves position");expect(enumeration->Skip(100)==S_FALSE,"Skip reports end");
@@ -50,20 +50,23 @@ int wmain(int argc,wchar_t** argv){
                 auto items=selection(root,files);ca::check(menu->GetState(items.Get(),FALSE,&state));expect(state==ECS_ENABLED,"Selected root enabled");
                 for(auto const& [action,command]:commands)for(auto slow:{FALSE,TRUE}){ca::check(command->GetState(items.Get(),slow,&state));const auto expected=static_cast<EXPCMDSTATE>(enabled.contains(action)?ECS_ENABLED:ECS_HIDDEN);if(state!=expected)throw std::runtime_error("Visibility: "+ca::utf8(*files.begin())+" / "+ca::utf8(ca::actionId(action))+" actual="+std::to_string(state)+" expected="+std::to_string(expected));}
             };
-            checkSelection({L"кино & 100% !.mp4",L"second.mov"},{A::more,A::compress,A::h264,A::h265,A::telegram,A::rename});
-            checkSelection({L"picture.png"},{A::more,A::image,A::pdf,A::rename});
+            checkSelection({L"кино & 100% !.mp4",L"second.mov"},{A::more,A::compress,A::h264,A::h265,A::telegram,A::audio,A::remux,A::frame,A::mediaInfo,A::rename});
+            checkSelection({L"picture.png"},{A::more,A::image,A::pdf,A::mediaInfo,A::rename});
             checkSelection({L"picture.png",L"pages.pdf"},{A::more,A::pdf,A::rename});
             checkSelection({L"pages.pdf"},{A::more,A::pdf,A::rename});
             checkSelection({L"document.docx"},{A::more,A::word,A::rename});
             checkSelection({L"table.xlsx"},{A::more,A::excel,A::rename});
             checkSelection({L"notes.txt"},{A::more,A::word,A::rename});
             checkSelection({L"unknown.bin"},{A::more,A::rename});
-            checkSelection({L"picture.png",L"кино & 100% !.mp4"},{A::more,A::rename});
+            checkSelection({L"picture.png",L"кино & 100% !.mp4"},{A::more,A::mediaInfo,A::rename});
+            checkSelection({L"track.wav",L"song.opus"},{A::more,A::audio,A::mediaInfo,A::rename});
+            checkSelection({L"track.wav",L"second.mov"},{A::more,A::audio,A::mediaInfo,A::rename});
+            checkSelection({L"track.wav",L"picture.png"},{A::more,A::mediaInfo,A::rename});
             auto image=selection(root,{L"picture.png"});expect(commands.at(A::h264)->Invoke(image.Get(),nullptr)==E_INVALIDARG,"Unsupported invocation rejected");
             ca::setOfficeCapability(false,ca::Capability::unavailable);auto doc=selection(root,{L"document.docx"});ca::check(commands.at(A::word)->GetState(doc.Get(),FALSE,&state));expect(state==ECS_DISABLED,"Unavailable Office disabled");
         }
         expect(unloadFn()==S_OK,"All COM references released");
-        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, nine selection cases, Unicode, Office availability, empty and unsupported invocation. No registration or Explorer UI tested.\n";result=0;
+        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, file and mixed-media selections, Unicode, Office availability, empty and unsupported invocation. No registration or Explorer UI tested.\n";result=0;
     }catch(std::exception const& e){std::cerr<<e.what()<<'\n';}
     if(SUCCEEDED(apartment))CoUninitialize();return result;
 }

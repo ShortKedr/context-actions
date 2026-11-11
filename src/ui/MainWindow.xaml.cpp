@@ -19,7 +19,31 @@ namespace {
 Visibility visible(bool value){return value?Visibility::Visible:Visibility::Collapsed;}
 auto label(char const* key){return box_value(ca::tr(key));}
 bool video(ca::Action a){return a==ca::Action::compress||a==ca::Action::h264||a==ca::Action::h265||a==ca::Action::telegram;}
-int category(ca::Action a){return video(a)?0:a==ca::Action::image?1:a==ca::Action::pdf?2:a==ca::Action::rename?3:4;}
+int category(ca::Action action){
+    if(video(action))return 0;
+    switch(action){
+    case ca::Action::image: return 1;
+    case ca::Action::pdf: return 2;
+    case ca::Action::rename: return 3;
+    case ca::Action::audio:
+    case ca::Action::remux:
+    case ca::Action::frame:
+    case ca::Action::mediaInfo: return 5;
+    default: return 4;
+    }
+}
+const char* actionHint(ca::Action action){
+    switch(action){
+    case ca::Action::image: return "imageHint";
+    case ca::Action::pdf: return "pdfHint";
+    case ca::Action::rename: return "renameHint";
+    case ca::Action::audio: return "audioHint";
+    case ca::Action::remux: return "remuxHint";
+    case ca::Action::frame: return "frameHint";
+    case ca::Action::mediaInfo: return "mediaInfoHint";
+    default: return video(action)?"videoHint":"officeHint";
+    }
+}
 void describe(FrameworkElement const& control,char const* key){
     AutomationProperties::SetName(control,ca::tr(key));ToolTipService::SetToolTip(control,label(key));
 }
@@ -103,8 +127,15 @@ MainWindow::~MainWindow(){*cancelled_=true;if(worker_.joinable())worker_.join();
 void MainWindow::Configure(ca::Options options,bool immediate) {
     updating_=true;options_=std::move(options);compact_=options_.action!=ca::Action::more&&!options_.files.empty();
     OutputBox().Text(options_.output.wstring());PatternBox().Text(options_.pattern);PrefixBox().Text(options_.prefix);SuffixBox().Text(options_.suffix);FindBox().Text(options_.find);ReplaceBox().Text(options_.replace);StartBox().Value(options_.start);
-    for(auto f:{L"png",L"jpg",L"webp",L"bmp",L"tiff",L"gif"})FormatBox().Items().Append(box_value(f));
-    for(uint32_t i=0;i<FormatBox().Items().Size();++i)if(unbox_value<hstring>(FormatBox().Items().GetAt(i))==options_.format)FormatBox().SelectedIndex(i);
+    for(auto action:{ca::Action::image,ca::Action::audio,ca::Action::remux}){
+        auto picker=FormatPicker(action);
+        auto formats=ca::outputFormats(action);
+        for(auto const& format:formats)picker.Items().Append(box_value(hstring(format)));
+        if(action==options_.action){
+            auto selected=std::find(formats.begin(),formats.end(),ca::outputFormat(options_));
+            picker.SelectedIndex(selected==formats.end()?-1:static_cast<int>(selected-formats.begin()));
+        }else picker.SelectedIndex(0);
+    }
     for(auto name:{L"English",L"Русский",L"Deutsch",L"Français",L"简体中文"})LanguageBox().Items().Append(box_value(name));
     auto lang=ca::language();LanguageBox().SelectedIndex(lang.starts_with(L"ru")?1:lang.starts_with(L"de")?2:lang.starts_with(L"fr")?3:lang.starts_with(L"zh")?4:0);
     Localize();RefreshFiles();RefreshActions(true);ApplyTheme();updating_=false;
@@ -121,7 +152,8 @@ void MainWindow::Localize(){
     DropTitle().Text(ca::tr("dropTitle"));DropHint().Text(ca::tr("dropHint"));FilesHeading().Text(ca::tr("filesTitle"));
     OutputBox().Header(label("saveTo"));OutputBox().PlaceholderText(ca::tr("sameFolder"));
     QualityBox().Header(label("quality"));WidthBox().Header(label("width"));FpsBox().Header(label("fps"));TargetBox().Header(label("target"));MuteBox().Content(label("mute"));
-    ImageQualityBox().Header(label("imageQuality"));ImageWidthBox().Header(label("width"));FormatBox().Header(label("format"));FirstFrameBox().Content(label("firstFrame"));
+    ImageQualityBox().Header(label("imageQuality"));ImageWidthBox().Header(label("width"));FirstFrameBox().Content(label("firstFrame"));
+    for(auto const& picker:{FormatBox(),AudioFormatBox(),ContainerFormatBox()})picker.Header(label("format"));
     PatternBox().Header(label("pattern"));PrefixBox().Header(label("prefix"));SuffixBox().Header(label("suffix"));FindBox().Header(label("find"));ReplaceBox().Header(label("replace"));StartBox().Header(label("start"));
     VideoAdvanced().Header(label("advanced"));ImageAdvanced().Header(label("advanced"));RenameAdvanced().Header(label("advanced"));
     for(auto const& expander:{VideoAdvanced(),ImageAdvanced(),RenameAdvanced()})describe(expander,"advanced");
@@ -130,7 +162,7 @@ void MainWindow::Localize(){
     for(auto const& box:{QualityBox(),WidthBox(),FpsBox(),TargetBox(),ImageQualityBox(),ImageWidthBox(),StartBox()})
         translateError(box,(box==WidthBox()||box==ImageWidthBox())&&box.Value()==1?ca::tr("widthRange"):numberError(box));
     translateError(PatternBox(),ca::tr("patternRequired"));translateError(OutputBox(),ca::tr("outputDirectory"));
-    auto selectedCategory=CategoryBox().SelectedIndex();CategoryBox().Items().Clear();for(auto key:{"videoCategory","imageCategory","pdfCategory","renameCategory","officeCategory"})CategoryBox().Items().Append(label(key));CategoryBox().SelectedIndex(selectedCategory<0?0:selectedCategory);
+    auto selectedCategory=CategoryBox().SelectedIndex();CategoryBox().Items().Clear();for(auto key:{"videoCategory","imageCategory","pdfCategory","renameCategory","officeCategory","mediaCategory"})CategoryBox().Items().Append(label(key));CategoryBox().SelectedIndex(selectedCategory<0?0:selectedCategory);
     auto preset=PresetBox().SelectedIndex();PresetBox().Items().Clear();for(auto key:{"highQuality","balanced","smallerFile","custom"})PresetBox().Items().Append(label(key));PresetBox().SelectedIndex(preset<0?1:preset);
     auto theme=std::clamp(GetPrivateProfileIntW(L"ui",L"theme",0,(ca::dataDirectory()/L"settings.ini").c_str()),0u,2u);ThemeBox().Items().Clear();for(auto key:{"system","light","dark"})ThemeBox().Items().Append(label(key));ThemeBox().SelectedIndex(theme);
     describe(SettingsButton(),"settings");describe(ExpandButton(),"fullWorkspace");describe(RemoveButton(),"remove");describe(UpButton(),"up");describe(DownButton(),"down");describe(FileList(),"file");
@@ -186,19 +218,32 @@ void MainWindow::RefreshActions(bool selectBest){
 void MainWindow::ActionChanged(){
     bool previous=updating_;updating_=true;auto a=options_.action;
     VideoOptions().Visibility(visible(video(a)));ImageOptions().Visibility(visible(a==ca::Action::image));RenameOptions().Visibility(visible(a==ca::Action::rename));FirstFrameBox().Visibility(visible(a==ca::Action::image||a==ca::Action::pdf));OutputOptions().Visibility(visible(a!=ca::Action::rename));
+    AudioFormatBox().Visibility(visible(a==ca::Action::audio));
+    ContainerFormatBox().Visibility(visible(a==ca::Action::remux));
     QualityBox().Value(options_.quality);ImageQualityBox().Value(options_.quality);WidthBox().Value(options_.width);ImageWidthBox().Value(options_.width);FpsBox().Value(options_.fps);TargetBox().Value(options_.targetMB);MuteBox().IsChecked(options_.mute);FirstFrameBox().IsChecked(options_.firstFrame);
     PresetBox().SelectedIndex(options_.quality==18?0:options_.quality==24?1:options_.quality==30?2:3);
     auto reason=ca::unavailableReason(a,options_.files);Availability().Message(reason);Availability().IsOpen(!reason.empty());RunButton().IsEnabled(!busy_&&reason.empty()&&!settings_);
-    Hint().Text(ca::tr(a==ca::Action::image?"imageHint":a==ca::Action::pdf?"pdfHint":a==ca::Action::rename?"renameHint":category(a)==4?"officeHint":"videoHint"));
+    Hint().Text(ca::tr(actionHint(a)));
     if(settings_){Heading().Text(ca::tr("settings"));Subtitle().Text(ca::tr("settingsHint"));}
     else{Heading().Text(compact_?ca::tr(ca::actionKey(a)):L"Context Actions");Subtitle().Text(compact_?std::to_wstring(options_.files.size())+L" · "+ca::tr("filesTitle"):ca::tr("tagline"));}
     updating_=previous;
+}
+ComboBox MainWindow::FormatPicker(ca::Action action){
+    switch(action){
+    case ca::Action::image: return FormatBox();
+    case ca::Action::audio: return AudioFormatBox();
+    case ca::Action::remux: return ContainerFormatBox();
+    default: return nullptr;
+    }
 }
 void MainWindow::ReadOptions(){
     auto a=options_.action;auto next=options_;
     next.output=std::wstring(OutputBox().Text());
     if(video(a)){next.quality=number(QualityBox());next.width=number(WidthBox());next.fps=number(FpsBox());next.targetMB=number(TargetBox());next.mute=MuteBox().IsChecked().Value();}
-    if(a==ca::Action::image){next.quality=number(ImageQualityBox());next.width=number(ImageWidthBox());next.format=std::wstring(unbox_value<hstring>(FormatBox().SelectedItem()));}
+    if(a==ca::Action::image){next.quality=number(ImageQualityBox());next.width=number(ImageWidthBox());}
+    if(auto picker=FormatPicker(a)){
+        if(auto selected=picker.SelectedItem())next.format=std::wstring(unbox_value<hstring>(selected));
+    }else next.format.clear();
     if(a==ca::Action::image||a==ca::Action::pdf)next.firstFrame=FirstFrameBox().IsChecked().Value();
     if(a==ca::Action::rename){next.pattern=std::wstring(PatternBox().Text());next.prefix=std::wstring(PrefixBox().Text());next.suffix=std::wstring(SuffixBox().Text());next.find=std::wstring(FindBox().Text());next.replace=std::wstring(ReplaceBox().Text());next.start=number(StartBox());}
     options_=std::move(next);

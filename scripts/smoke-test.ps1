@@ -93,6 +93,85 @@ try {
     Native $qpdf @('--check',$merged[0].FullName)
     $pages = & $qpdf --show-npages $merged[0].FullName
     Check ($LASTEXITCODE -eq 0 -and $pages -eq [string](1 + $imageInputs.Count)) 'PDF page merge failed'
+
+    $audioSource = Join-Path $testDirectory 'Звук.wav'
+    Native $ffmpeg @('-v','error','-i',$video,'-vn','-c:a','pcm_s16le',$audioSource)
+    $audioFixtures = [ordered]@{
+        'sound-mp3.mp3' = @('-c:a','libmp3lame')
+        'sound-m4a.m4a' = @('-c:a','aac')
+        'sound-aac.aac' = @('-c:a','aac','-f','adts')
+        'sound-flac.flac' = @('-c:a','flac')
+        'sound-ogg.ogg' = @('-c:a','libvorbis')
+        'sound-oga.oga' = @('-c:a','libvorbis','-f','ogg')
+        'sound-opus.opus' = @('-c:a','libopus')
+        'sound-aif.aif' = @('-c:a','pcm_s16be','-f','aiff')
+        'sound-aiff.aiff' = @('-c:a','pcm_s16be')
+        'sound-wma.wma' = @('-c:a','wmav2')
+    }
+    $audioInputs = @($audioSource,$video)
+    foreach ($fixture in $audioFixtures.GetEnumerator()) {
+        $path = Join-Path $testDirectory $fixture.Key
+        Native $ffmpeg (@('-v','error','-i',$audioSource) + $fixture.Value + @($path))
+        $audioInputs += $path
+    }
+    $audioFormats = [ordered]@{ mp3='mp3'; m4a='aac'; wav='pcm_s16le'; flac='flac'; opus='opus' }
+    foreach ($format in $audioFormats.Keys) {
+        $options = @()
+        if ($format -ne 'mp3') { $options = @('--format',$format) }
+        $outputs = @(App 'audio' "audio-$format" $audioInputs $options)
+        Check ($outputs.Count -eq $audioInputs.Count) "Missing $format audio output"
+        foreach ($file in $outputs) {
+            $streams = (& $ffprobe -v error -show_streams -of json $file.FullName | ConvertFrom-Json).streams
+            Check ($LASTEXITCODE -eq 0 -and @($streams).Count -eq 1 -and $streams[0].codec_type -eq 'audio' -and
+                $streams[0].codec_name -eq $audioFormats[$format] -and $file.Extension -eq ".$format") "Wrong audio format: $($file.Name)"
+            Native $ffmpeg @('-v','error','-xerror','-i',$file.FullName,'-f','null','-')
+        }
+    }
+    $silent = Join-Path $testDirectory 'silent.mp4'
+    Native $ffmpeg @('-v','error','-i',$video,'-an','-c:v','copy',$silent)
+    Check (@(App 'audio' 'audio-silent' @($silent) @() 1).Count -eq 0) 'Silent input produced an audio result'
+
+    $twoTracks = Join-Path $testDirectory 'two-tracks.mp4'
+    Native $ffmpeg @('-v','error','-i',$video,'-map','0:v:0','-map','0:a:0','-map','0:a:0','-c','copy',$twoTracks)
+    $streamHashes = @('-v','error','-xerror','-map','0','-c','copy','-f','streamhash','-')
+    $expected = & $ffmpeg -i $twoTracks @streamHashes
+    Check ($LASTEXITCODE -eq 0 -and @($expected).Count -eq 3) 'Invalid stream-copy fixture'
+    foreach ($format in @('mkv','mp4','mov')) {
+        $options = @()
+        if ($format -ne 'mkv') { $options = @('--format',$format) }
+        $outputs = @(App 'remux' "remux-$format" @($twoTracks) $options)
+        Check ($outputs.Count -eq 1 -and $outputs[0].Extension -eq ".$format") "Missing $format stream-copy result"
+        $actual = & $ffmpeg -i $outputs[0].FullName @streamHashes
+        Check ($LASTEXITCODE -eq 0 -and ($actual -join "`n") -eq ($expected -join "`n")) "Remux changed or dropped a stream in $format"
+    }
+    $subtitle = Join-Path $testDirectory 'track.srt'
+    [IO.File]::WriteAllText($subtitle,"1`n00:00:00,000 --> 00:00:00,800`nTest subtitle`n")
+    $subtitled = Join-Path $testDirectory 'subtitled.mkv'
+    Native $ffmpeg @('-v','error','-i',$video,'-i',$subtitle,'-map','0','-map','1:s:0','-c','copy',$subtitled)
+    Check (@(App 'remux' 'remux-incompatible' @($subtitled) @('--format','mp4') 1).Count -eq 0) 'Incompatible subtitles should prevent remux'
+
+    $frames = @(App 'frame' 'video-frame' $videoInputs)
+    Check ($frames.Count -eq $videoInputs.Count) 'Missing video frame'
+    foreach ($file in $frames) {
+        $stream = (& $ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height -of json $file.FullName | ConvertFrom-Json).streams[0]
+        Check ($LASTEXITCODE -eq 0 -and $file.Extension -eq '.png' -and $stream.codec_name -eq 'png' -and
+            $stream.width -eq 160 -and $stream.height -eq 90) "Wrong video frame: $($file.Name)"
+    }
+    $coverOnly = Join-Path $testDirectory 'cover-only.mp4'
+    Native $ffmpeg @('-v','error','-i',$video,'-i',$image,'-map','0:a:0','-map','1:v:0','-c','copy','-disposition:v','attached_pic',$coverOnly)
+    Check (@(App 'frame' 'frame-cover-only' @($coverOnly) @() 1).Count -eq 0) 'Embedded cover art should not count as a video frame'
+
+    $mediaReports = @(App 'media-info' 'media-info' @($video,$audioSource,$image))
+    Check ($mediaReports.Count -eq 3) 'Missing media information report'
+    foreach ($file in $mediaReports) {
+        $report = Get-Content -LiteralPath $file.FullName -Raw
+        Check ($file.Extension -eq '.txt' -and $report -match '(?m)^format_name=\S+') "Missing container details: $($file.Name)"
+    }
+    $reportCodecs = $mediaReports | ForEach-Object { Get-Content -LiteralPath $_.FullName }
+    foreach ($codec in @('h264','pcm_s16le','png')) {
+        Check ($reportCodecs -contains "codec_name=$codec") "Missing media report codec: $codec"
+    }
+
     $broken = Join-Path $testDirectory 'broken.mp4'; [IO.File]::WriteAllText($broken,'not a video')
     $batch = @(App 'h264' 'mixed-results' @($broken,(Join-Path $testDirectory 'missing.mp4'),$video) @() 1)
     Check ($batch.Count -eq 1) 'One failure should not stop the next file'
@@ -100,7 +179,7 @@ try {
     Check ($repeat.Count -eq 2) 'Existing output was overwritten'
     Check ((Get-FileHash -LiteralPath $video).Hash -eq $sourceHash) 'Source was modified'
     Check (@(Get-ChildItem -LiteralPath $testDirectory -Directory -Recurse -Filter '.context-actions-*').Count -eq 0) 'Temporary result was not cleaned'
-    "PASS: $($videoInputs.Count * $videoActions.Count) video conversions, $($imageInputs.Count * $imageFormats.Count) image conversions, size limit, PDF merge with all image formats, batch failure isolation, conflicts, Unicode paths, source preservation." |
+    "PASS: $($videoInputs.Count * $videoActions.Count) video, $($imageInputs.Count * $imageFormats.Count) image and $($audioInputs.Count * $audioFormats.Count) audio conversions, lossless remux, video frames, media reports, size limit, PDF merge with all image formats, batch failure isolation, conflicts, Unicode paths, source preservation." |
         Set-Content -LiteralPath (Join-Path $ReportDirectory 'application-smoke.txt') -Encoding utf8
     Get-Content -LiteralPath (Join-Path $ReportDirectory 'application-smoke.txt')
 } finally { $env:CONTEXT_ACTIONS_DATA_DIR = $previousData }
