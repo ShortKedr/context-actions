@@ -105,6 +105,29 @@ jobs:
           rpm2cpio dist/linux/*.rpm | (cd build/linux/rpm-check && cpio -id)
           build/linux/rpm-check/usr/bin/context-actions --help
           desktop-file-validate build/linux/rpm-check/usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+      - name: Verify the per-user archive installer
+        run: |
+          export XDG_DATA_HOME="$RUNNER_TEMP/Context Actions user data"
+          installer=build/linux/archive-check/install.sh
+          app="$XDG_DATA_HOME/context-actions-app"
+          launcher="$XDG_DATA_HOME/applications/io.github.ShortKedr.ContextActions.desktop"
+          icon="$XDG_DATA_HOME/icons/hicolor/256x256/apps/io.github.ShortKedr.ContextActions.png"
+          bash "$installer" install
+          "$app/context-actions" --help
+          desktop-file-validate "$launcher"
+          test -f "$icon"
+          if bash "$installer" install; then
+            echo 'The per-user installer allowed replacing the same version without confirmation.' >&2
+            exit 1
+          fi
+          bash "$installer" install --allow-reinstall-or-downgrade
+          mkdir -p "$XDG_DATA_HOME/context-actions"
+          touch "$XDG_DATA_HOME/context-actions/settings"
+          "$app/install.sh" uninstall
+          test ! -L "$app"
+          test ! -L "$launcher"
+          test ! -L "$icon"
+          test -f "$XDG_DATA_HOME/context-actions/settings"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ContextActions-linux-${{ matrix.arch }}-app
@@ -123,5 +146,46 @@ jobs:
             dist/linux/*.rpm.sha256
             dist/linux/ContextActions-linux-installer.sh
             dist/linux/ContextActions-linux-installer.sh.sha256
+          compression-level: 0
+          if-no-files-found: error
+  arch:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install Arch build and media dependencies
+        timeout-minutes: 20
+        run: |
+          pacman -Syu --noconfirm --needed \
+            cmake ninja gtk4 ffmpeg qpdf desktop-file-utils hicolor-icon-theme
+      - name: Build and verify the Arch package
+        run: |
+          useradd --create-home context-actions-builder
+          source_dir="$RUNNER_TEMP/context-actions-arch"
+          install -d "$source_dir"
+          tar -C "$GITHUB_WORKSPACE" --exclude='./.git' -cf - . | tar -C "$source_dir" -xf -
+          chown -R context-actions-builder "$source_dir"
+          cd "$source_dir/packaging/linux/arch"
+          runuser -u context-actions-builder -- makepkg --noconfirm
+          shopt -s nullglob
+          packages=(context-actions-*-1-x86_64.pkg.tar.zst)
+          test "${#packages[@]}" -eq 1
+          package="${packages[0]}"
+          pacman -U --noconfirm -- "$package"
+          pacman -Q context-actions
+          desktop-file-validate /usr/share/applications/io.github.ShortKedr.ContextActions.desktop
+          /usr/bin/context-actions --help
+          bash "$source_dir/scripts/smoke-test-posix.sh" /usr/bin/context-actions "$source_dir/build"
+          mkdir -p "$GITHUB_WORKSPACE/dist/linux-arch"
+          install -m 0644 "$package" "$GITHUB_WORKSPACE/dist/linux-arch/"
+          cd "$GITHUB_WORKSPACE/dist/linux-arch"
+          sha256sum "$package" > "$package.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ContextActions-linux-arch-x86_64-installer
+          path: dist/linux-arch/
           compression-level: 0
           if-no-files-found: error

@@ -1,0 +1,28 @@
+pkgname=context-actions
+pkgver=$(sed -nE 's/^project\(ContextActions VERSION ([^ ]+) .*/\1/p' "$startdir/../../../CMakeLists.txt")
+pkgrel=1
+pkgdesc='Batch media conversion, PDF assembly, and file renaming'
+arch=('x86_64')
+url='https://github.com/ShortKedr/context-actions'
+license=('MIT')
+depends=('glibc' 'glib2' 'gtk4' 'libgcc' 'libstdc++' 'ffmpeg' 'qpdf' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja')
+optdepends=('libreoffice-fresh: document and spreadsheet PDF export'
+            'libreoffice-still: document and spreadsheet PDF export')
+options=('!debug')
+
+# Build from the Context Actions source checkout containing this recipe.
+build() {
+    cmake -S "$startdir/../../.." -B "$srcdir/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build "$srcdir/build"
+}
+
+check() {
+    ctest --test-dir "$srcdir/build" --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+    install -Dm644 "$startdir/../../../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

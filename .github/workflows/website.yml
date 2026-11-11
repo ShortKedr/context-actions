@@ -3,6 +3,12 @@ name: Publish Context Actions website
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: github-pages
@@ -10,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,6 +27,8 @@ jobs:
           persist-credentials: false
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Build website
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python web/build.py
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:

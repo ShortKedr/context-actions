@@ -115,8 +115,8 @@ jobs:
               echo
               echo '- **Windows x64** uses the setup EXE or portable ZIP. Setup downloads verified FFmpeg and qpdf archives. The portable app uses FFmpeg, ffprobe, and qpdf from PATH or its engines folder.'
               echo '- **macOS** uses the universal PKG or ZIP on Intel and Apple Silicon. The installer is an unsigned preview. Install the media tools separately with `brew install ffmpeg-full qpdf`.'
-              echo '- **Linux** uses the DEB, RPM or tar archive for x86-64 or ARM64.'
-              echo '- **Linux reinstall or downgrade** uses `ContextActions-linux-installer.sh` to select a downloaded DEB or RPM and confirm the replacement.'
+              echo '- **Linux** uses DEB or RPM for x86-64 and ARM64, or the pacman package for Arch Linux x86-64. The portable tar archives include a per-user installer for other compatible distributions.'
+              echo '- **Linux reinstall and downgrade** uses `ContextActions-linux-installer.sh` to select a downloaded DEB, RPM or Arch package and confirm the replacement.'
               echo '- **SHA-256** checksums are in `SHA256SUMS.txt`.'
               echo
               echo '## Changes'

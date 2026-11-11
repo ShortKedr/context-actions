@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Compress videos, resize images, assemble PDFs, and batch rename files from File Explorer with Context Actions for Windows 11.">
+  <meta name="description" content="Compress videos, resize images, assemble PDFs, and batch rename files with Context Actions for Windows, macOS, and Linux.">
   <meta name="theme-color" content="#f7f8f4">
-  <title>Context Actions — File tools for Windows 11</title>
+  <title>Context Actions — File tools for Windows, macOS, and Linux</title>
   <link rel="icon" href="./assets/context-actions.png">
   <script src="./theme.js"></script>
   <link rel="stylesheet" href="./site.css">
@@ -19,9 +19,9 @@
         Context<span>Actions</span>
       </a>
       <nav aria-label="Main navigation">
+        <a href="#downloads">Downloads</a>
         <a href="#actions">Features</a>
         <a href="#walkthrough">Walkthrough</a>
-        <a href="#get-started">Get started</a>
       </nav>
       <div class="header-actions">
         <button class="theme-switch" type="button" role="switch" aria-label="Dark theme" aria-checked="false" hidden>
@@ -36,11 +36,11 @@
   <main id="content">
     <section class="shell hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> Windows 11 x64 preview</p>
+        <p class="eyebrow"><span class="status-dot"></span> @RELEASE_TAG@ · Windows, macOS, Linux</p>
         <h1 id="hero-title">File tools, a<br class="hero-break"> <em>right-click</em> away.</h1>
         <p class="hero-description">Compress videos, resize images, assemble PDFs, and rename files in batches. Start right where your files are.</p>
         <div class="button-row">
-          <a class="button button-primary" href="#get-started">Build the preview <span aria-hidden="true">↓</span></a>
+          <a class="button button-primary" href="#downloads">Download Context Actions <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#walkthrough"><span class="play-icon" aria-hidden="true"></span> Watch walkthrough</a>
         </div>
       </div>
@@ -87,6 +87,19 @@
       </div>
     </section>
 
+    <section class="downloads section-band" id="downloads" aria-labelledby="downloads-title">
+      <div class="shell">
+        <h2 id="downloads-title">Download for your platform.</h2>
+        <!-- DOWNLOAD_CARDS -->
+        <div class="download-links">
+          <a class="text-link" href="@RELEASE_URL@">Release notes <span aria-hidden="true">↗</span></a>
+          <!-- CHECKSUM_LINK -->
+          <a class="text-link" href="https://github.com/ShortKedr/context-actions/blob/HEAD/docs/build.md">Build from source <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="download-access">GitHub sign-in may be required to download.</p>
+      </div>
+    </section>
+
     <section class="features section-band" id="actions" aria-labelledby="features-title">
       <div class="shell">
         <p class="eyebrow">Features</p>
@@ -114,7 +127,7 @@
           </article>
         </div>
         <div class="feature-note">
-          <p>Office to PDF is also available in preview with an installed copy of Word or Excel.</p>
+          <p>Export Office files to PDF with Word or Excel on Windows, or LibreOffice on macOS and Linux.</p>
           <a class="text-link" href="https://github.com/ShortKedr/context-actions/blob/HEAD/docs/support.md">Supported formats and limits <span aria-hidden="true">↗</span></a>
         </div>
       </div>
@@ -136,20 +149,6 @@
       </div>
     </section>
 
-    <section class="get-started" id="get-started" aria-labelledby="get-started-title">
-      <div class="shell build-layout">
-        <div>
-          <p class="eyebrow">Context Actions 0.1</p>
-          <h2 id="get-started-title">Build the Windows preview.</h2>
-          <p>Build from the repository to get a portable app and preview installer. Explorer integration is an optional installer step.</p>
-          <a class="button button-light" href="https://github.com/ShortKedr/context-actions/blob/HEAD/docs/build.md">Read the build guide <span aria-hidden="true">↗</span></a>
-        </div>
-        <div class="command">
-          <div class="command-label">PowerShell · from the repository root</div>
-          <pre><code>.\scripts\build-and-package.ps1</code></pre>
-        </div>
-      </div>
-    </section>
   </main>
 
   <footer class="shell site-footer">

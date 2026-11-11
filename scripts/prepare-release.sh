@@ -29,6 +29,7 @@ collect ContextActions-win-x64 "ContextActions-$version-win-x64-setup.exe"
 collect ContextActions-macos-universal-app "ContextActions-$version-macos-universal.zip"
 collect ContextActions-macos-universal-installer "ContextActions-$version-macos-universal.pkg"
 collect ContextActions-linux-amd64-installers ContextActions-linux-installer.sh
+collect ContextActions-linux-arch-x86_64-installer "context-actions-$version-1-x86_64.pkg.tar.zst"
 for deb_arch in amd64 arm64; do
     case $deb_arch in
         amd64) machine=x86_64 ;;

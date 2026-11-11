@@ -26,9 +26,9 @@ The app uses shared English, Russian, German, French, and Simplified Chinese tra
 | --- | --- | --- |
 | Windows 11 x64 | WinUI 3 and File Explorer integration | Portable ZIP and Inno Setup EXE |
 | macOS 11+, Intel and Apple Silicon | AppKit with Finder file opening | Universal app ZIP and PKG |
-| Linux x86-64 and ARM64 | GTK 4.6+ with desktop launcher and file opening | Tar archive, DEB and RPM |
+| Linux x86-64 and ARM64 | GTK 4.6+ with desktop launcher and file opening | DEB, RPM, Arch x86-64 package, and portable tar archive |
 
-Get the latest app archives and installers from [GitHub Releases](https://github.com/ShortKedr/context-actions/releases). Windows Setup downloads and verifies the media tools and offers File Explorer integration as an opt-in option. The Windows portable app can use media tools on `PATH`. On macOS, install them with `brew install ffmpeg-full qpdf`. The Linux DEB and RPM declare their media dependencies. [Local build and installation instructions](docs/build.md)
+Get app archives and installers from [GitHub Releases](https://github.com/ShortKedr/context-actions/releases). Windows Setup downloads and verifies the media tools and offers File Explorer integration as an opt-in option. The Windows portable app can use media tools on `PATH`. On macOS, install them with `brew install ffmpeg-full qpdf`. Linux packages declare their media dependencies. The portable Linux build uses the distribution's GTK 4, FFmpeg, and qpdf packages. [Local build and installation instructions](docs/build.md)
 
 ## Preview status
 

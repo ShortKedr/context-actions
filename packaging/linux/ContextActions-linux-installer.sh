@@ -18,7 +18,7 @@ fi
 command -v pkexec >/dev/null || fail 'Context Actions Installer requires PolicyKit (pkexec).'
 
 package=$(zenity --file-selection --title='Select a Context Actions package' \
-    --file-filter='Context Actions packages | *.deb *.rpm') || exit 0
+    --file-filter='Context Actions packages | *.deb *.rpm *.pkg.tar.zst') || exit 0
 package=$(realpath -- "$package") || fail 'Could not find the selected package.'
 case "$package" in
     *.deb)
@@ -41,7 +41,16 @@ case "$package" in
             fail 'Could not read the package version.'
         format=rpm
         ;;
-    *) fail 'Select a Context Actions DEB or RPM package.' ;;
+    *.pkg.tar.zst)
+        manager=/usr/bin/pacman
+        [[ -x "$manager" ]] && command -v vercmp >/dev/null || fail 'This system cannot install Arch packages.'
+        metadata=$(LC_ALL=C "$manager" -Qp -- "$package") || fail 'Could not read the Arch package.'
+        read -r name version <<< "$metadata"
+        [[ "$version" =~ ^([0-9]+:)?[[:alnum:]_.+~]+-[0-9]+(\.[0-9]+)?$ ]] ||
+            fail 'Could not read the package version.'
+        format=arch
+        ;;
+    *) fail 'Select a Context Actions DEB, RPM or Arch package.' ;;
 esac
 [[ "$name" == context-actions && -n "$version" ]] || fail 'Select a Context Actions package.'
 
@@ -53,11 +62,16 @@ installed_versions() {
         [[ "$status" == 0 ]] || return "$status"
         printf '%s\n' "$entries" |
             sed -n '/^\(installed\|triggers-.*\|unpacked\|half-configured\|half-installed\) /s/^[^ ]* //p'
-    else
+    elif [[ "$format" == rpm ]]; then
         entries=$(LC_ALL=C rpm -q --queryformat '%{EPOCHNUM}:%{VERSION}-%{RELEASE}\n' context-actions) || status=$?
         [[ "$entries" == 'package context-actions is not installed' ]] && return 0
         [[ "$status" == 0 ]] || return "$status"
         printf '%s\n' "$entries"
+    else
+        entries=$(LC_ALL=C "$manager" -Q -- context-actions 2>&1) || status=$?
+        [[ "$status" == 1 && "$entries" == "error: package 'context-actions' was not found" ]] && return 0
+        [[ "$status" == 0 && "$entries" == 'context-actions '* ]] || return 1
+        printf '%s\n' "${entries#context-actions }"
     fi
 }
 
@@ -65,6 +79,8 @@ compare_version() {
     if [[ "$format" == rpm ]]; then
         CONTEXT_ACTIONS_INCOMING_EVR="$version" CONTEXT_ACTIONS_INSTALLED_EVR="$1" \
             rpm --eval '%{lua:print(rpm.vercmp(os.getenv("CONTEXT_ACTIONS_INCOMING_EVR"), os.getenv("CONTEXT_ACTIONS_INSTALLED_EVR")))}'
+    elif [[ "$format" == arch ]]; then
+        vercmp "$version" "$1"
     elif dpkg --compare-versions "$version" gt "$1"; then
         printf '1\n'
     elif dpkg --compare-versions "$version" lt "$1"; then
@@ -108,7 +124,7 @@ if [[ "$same_version" == true || -n "$older_than" ]]; then
     if [[ "$same_version" == true ]]; then
         if [[ "$format" == deb ]]; then
             options+=(--reinstall)
-        else
+        elif [[ "$format" == rpm ]]; then
             action=reinstall
         fi
     elif [[ "$format" == deb ]]; then
@@ -116,12 +132,18 @@ if [[ "$same_version" == true || -n "$older_than" ]]; then
     fi
 fi
 
+if [[ "$format" == arch ]]; then
+    command_line=("$manager" --noconfirm -U -- "$package")
+else
+    command_line=("$manager" "${options[@]}" "$action" "$package")
+fi
+
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
 if (
     status=0
     pkexec --disable-internal-agent /usr/bin/env "CONTEXT_ACTIONS_GUI_DOWNGRADE=$override" \
-        DEBIAN_FRONTEND=noninteractive "$manager" "${options[@]}" "$action" "$package" >"$log" 2>&1 ||
+        DEBIAN_FRONTEND=noninteractive "${command_line[@]}" >"$log" 2>&1 ||
         status=$?
     printf '100\n'
     exit "$status"

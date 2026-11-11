@@ -99,7 +99,19 @@ bash packaging/macos/package.sh build/macos dist/macos
 
 ## Linux
 
-GTK 4.6+ используется на всех дистрибутивах Linux. Ниже приведена сборка на Ubuntu 24.04, которая служит базовой системой CI. На других дистрибутивах установите эквивалентные пакеты GTK 4, компилятора C++20 и инструментов сборки. FFmpeg должен содержать энкодеры `libx264`, `libx265` и `libwebp`.
+Интерфейс Linux использует GTK 4.6+. Установите FFmpeg с энкодерами `libx264`, `libx265` и `libwebp` и qpdf из репозитория своего дистрибутива. Для экспорта Office в PDF также нужны LibreOffice Writer и Calc. Настройки хранятся в `$XDG_DATA_HOME/context-actions` или `~/.local/share/context-actions`. [Зависимости GTK по дистрибутивам](https://www.gtk.org/docs/installations/linux).
+
+- **Debian и Ubuntu** — `sudo apt install ./<имя-пакета>.deb`.
+- **Fedora и другие RPM-дистрибутивы** — установка через менеджер пакетов, например `sudo dnf install ./<имя-пакета>.rpm`. Для Fedora может понадобиться RPM Fusion Free с полным FFmpeg.
+- **Arch Linux x86-64** — `sudo pacman -U ./context-actions-<версия>-1-x86_64.pkg.tar.zst`. Для сборки из исходников установите зависимости из `packaging/linux/arch/PKGBUILD` и запустите `makepkg` в этом каталоге от обычного пользователя. [Документация Arch о сборке пакетов](https://wiki.archlinux.org/title/Creating_packages).
+
+### Переносимый архив
+
+Для других дистрибутивов скачайте `.tar.gz` для x86-64 или ARM64. Он собран на Ubuntu 24.04 и требует совместимых системных библиотек glibc и GTK. После распаковки можно запустить `./usr/bin/context-actions`. Если архив содержит `install.sh`, выполните `bash install.sh install` без sudo, чтобы добавить ярлык **Context Actions** и ассоциации **Open With** для текущего пользователя. Команда `bash install.sh uninstall` удаляет приложение и ярлык, сохраняя настройки. Для подтверждённой переустановки или отката используйте `bash install.sh install --allow-reinstall-or-downgrade`. Скрипту нужны Bash, GNU coreutils и `flock` из util-linux.
+
+### Сборка из исходников
+
+Если системные библиотеки несовместимы с архивом, соберите приложение на своём дистрибутиве. Установите компилятор C++20, CMake 3.25+, Ninja, pkg-config, заголовки GTK 4 и медиаинструменты. Пример для Ubuntu 24.04:
 
 ```bash
 sudo apt install g++ cmake ninja-build pkg-config libgtk-4-dev ffmpeg qpdf dpkg-dev rpm cpio
@@ -110,13 +122,13 @@ bash scripts/smoke-test-posix.sh build/linux/src/linux/context-actions build/lin
 cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
 ```
 
-DEB устанавливается через `apt install ./<имя-пакета>.deb`, RPM через `dnf install ./<имя-пакета>.rpm`. Для Fedora может понадобиться RPM Fusion Free с полным FFmpeg. В архиве приложение находится в `usr/bin/context-actions`, ему нужны совместимые системные библиотеки GTK и инструменты FFmpeg и qpdf. Для экспорта Office в PDF нужны пакеты LibreOffice Writer и Calc. После установки ярлык **Context Actions** появляется в меню приложений и в **Open With** для зарегистрированных типов файлов. Настройки хранятся в `$XDG_DATA_HOME/context-actions` или `~/.local/share/context-actions`. [Зависимости GTK по дистрибутивам](https://www.gtk.org/docs/installations/linux).
+Собранное приложение находится в `build/linux/src/linux/context-actions`. Установка из сборки через `cmake --install build/linux --prefix "$HOME/.local"` копирует бинарник, значок и desktop entry. Для запуска из меню каталог `$HOME/.local/bin` должен быть в `PATH` графического сеанса.
 
-Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB или RPM. При наличии Zenity и PolicyKit запустите `bash ContextActions-linux-installer.sh`, выберите скачанный пакет и отметьте **Allow reinstall or downgrade**. Установщик запросит подтверждение через PolicyKit. Для локальной сборки используйте `bash packaging/linux/ContextActions-linux-installer.sh`.
+Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB, RPM или пакет Arch Linux. При наличии Zenity и PolicyKit запустите `bash ContextActions-linux-installer.sh`, выберите скачанный пакет и отметьте **Allow reinstall or downgrade**. Установщик запросит подтверждение через PolicyKit. Для локальной сборки используйте `bash packaging/linux/ContextActions-linux-installer.sh`.
 
 ## GitHub Actions
 
-Три workflow собирают приложение и установщик при push, pull request и ручном запуске. Артефакты и SHA-256 доступны в результатах workflow. Windows собирается для x64, macOS получает один универсальный пакет для обеих архитектур, Linux собирается отдельно для amd64 и arm64.
+Три workflow собирают приложение и установщик при push, pull request и ручном запуске. Артефакты и SHA-256 доступны в результатах workflow. Windows собирается для x64, macOS получает один универсальный пакет для обеих архитектур, а Linux CI собирает DEB, RPM и архивы для amd64 и arm64. Отдельная задача собирает и проверяет пакет pacman в Arch Linux x86-64.
 
 ## Выпуск версии
 
