@@ -1,39 +1,61 @@
 "use strict";
 
-const chapters = [...document.querySelectorAll("[data-time]")];
-const scenes = [
-  {
-    title: "Right-click a video.",
-    summary: "In File Explorer, open Context Actions and choose Convert to MP4 / H.264.",
-    image: "explorer.jpg",
-    alt: "The Context Actions submenu in File Explorer with Convert to MP4 / H.264.",
-  },
-  {
-    title: "Convert video to MP4.",
-    summary: "Choose a quality preset and select Run. When processing finishes, open the MP4 or show it in its folder.",
-    image: "video.jpg",
-    alt: "Completed H.264 conversion with links to open the result or show it in its folder.",
-  },
-];
-
 const stage = document.querySelector(".stage");
 const title = document.querySelector("#scene-title");
 const summary = document.querySelector("#scene-summary");
-const image = document.querySelector("#scene-image");
+const explorer = document.querySelector(".explorer");
+const processing = document.querySelector(".processing");
+const fileStatus = document.querySelector(".file-status");
+const jobStatus = document.querySelector(".job-status");
 const play = document.querySelector("#play");
 const position = document.querySelector("#position");
 const time = document.querySelector("#time");
+const chapters = [...document.querySelectorAll("[data-time]")];
 const duration = Number(position.max);
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-const starts = chapters.map(chapter => Number(chapter.dataset.time));
-let currentChapter = 0;
+const runningAt = 6.1;
+const doneAt = 8.35;
+const steps = [
+  {
+    at: 0, chapter: 0, id: "file",
+    title: "Start in File Explorer",
+    summary: "Right-click the video you want to convert.",
+  },
+  {
+    at: 0.8, chapter: 0, id: "context",
+    title: "Open Context Actions",
+    summary: "Open the Context Actions submenu from the right-click menu.",
+  },
+  {
+    at: 1.7, chapter: 0, id: "menu",
+    title: "Choose MP4 / H.264",
+    summary: "Select Convert to MP4 / H.264 to open the compact processing window.",
+  },
+  {
+    at: 4.2, chapter: 1, id: "ready",
+    title: "Run the conversion",
+    summary: "Keep Balanced quality and save beside the source, then select Run.",
+    fileStatus: "Ready",
+    jobStatus: "Ready",
+  },
+  {
+    at: runningAt, chapter: 1, id: "running",
+    title: "Converting to MP4",
+    summary: "Select Cancel if you need to stop the conversion.",
+    fileStatus: "Processing…",
+    jobStatus: "Processing…",
+  },
+  {
+    at: doneAt, chapter: 2, id: "done",
+    title: "Your MP4 is ready",
+    summary: "Open the result or show it in its folder.",
+    fileStatus: "Done",
+    jobStatus: "Done · 1 succeeded · 0 failed",
+  },
+];
+
 let currentTime = 0;
 let startTime;
 let frame;
-
-for (const scene of scenes) {
-  new Image().src = scene.image;
-}
 
 function formatTime(seconds) {
   return `0:${String(Math.floor(seconds)).padStart(2, "0")}`;
@@ -41,23 +63,29 @@ function formatTime(seconds) {
 
 function showTime(seconds) {
   currentTime = Math.min(Math.max(0, seconds), duration);
-  const index = starts.findLastIndex(start => start <= currentTime);
-  const scene = scenes[index];
-  const elapsed = currentTime - starts[index];
+  const step = steps.findLast(step => step.at <= currentTime);
 
-  if (index !== currentChapter) {
-    chapters[currentChapter].removeAttribute("aria-current");
-    chapters[index].setAttribute("aria-current", "true");
-    currentChapter = index;
-    title.textContent = scene.title;
-    summary.textContent = scene.summary;
-    image.src = scene.image;
-    image.alt = scene.alt;
+  if (stage.dataset.step !== step.id) {
+    stage.dataset.step = step.id;
+    title.textContent = step.title;
+    summary.textContent = step.summary;
+    explorer.hidden = step.chapter !== 0;
+    processing.hidden = step.chapter === 0;
+
+    if (!processing.hidden) {
+      fileStatus.textContent = step.fileStatus;
+      jobStatus.textContent = step.jobStatus;
+    }
+
+    chapters.forEach((chapter, index) => {
+      if (index === step.chapter) chapter.setAttribute("aria-current", "true");
+      else chapter.removeAttribute("aria-current");
+    });
   }
 
-  const entrance = index === 0 || reducedMotion.matches ? 0 : Math.max(0, 1 - elapsed / 0.5) ** 3;
-  stage.style.setProperty("--scene-shift", `${entrance * 22}px`);
-  stage.style.setProperty("--scene-opacity", 1 - entrance * 0.22);
+  const progress = Math.min(Math.max(0, (currentTime - runningAt) / (doneAt - runningAt)), 1);
+  stage.style.setProperty("--offset", `-${currentTime}s`);
+  stage.style.setProperty("--progress", `${progress * 100}%`);
 
   position.value = currentTime;
   const clock = formatTime(currentTime);
@@ -110,5 +138,11 @@ play.addEventListener("click", () => {
 });
 
 position.addEventListener("input", () => seek(Number(position.value)));
-chapters.forEach((chapter, index) => chapter.addEventListener("click", () => seek(starts[index])));
-reducedMotion.addEventListener("change", () => showTime(currentTime));
+chapters.forEach(chapter => chapter.addEventListener("click", () => {
+  pause();
+  seek(Number(chapter.dataset.time));
+}));
+
+showTime(0);
+document.querySelector(".controls").hidden = false;
+document.querySelector(".chapters").hidden = false;

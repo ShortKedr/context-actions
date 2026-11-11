@@ -2,9 +2,9 @@
 
 Compress videos, resize images, combine scans into a PDF, and rename files in batches with a native Windows 11 x64 app. Start with a right-click in File Explorer or open the full workspace to build a file list.
 
-![Animated walkthrough from the Context Actions right-click menu to the MP4 processing window](docs/showcase/demo.gif)
+![Animated walkthrough of selecting Convert to MP4 / H.264 in File Explorer and running the conversion through to completion](docs/showcase/demo.gif)
 
-[Watch the 10-second MP4](docs/showcase/demo.mp4) · [Open the interactive tour](docs/showcase/index.html) in a browser from your local checkout.
+[Watch the 10-second MP4](docs/showcase/demo.mp4) · [Open the interactive HTML tour](docs/showcase/index.html) in a browser from your local checkout.
 
 ## What you can do
 
@@ -22,9 +22,9 @@ Choose an action in File Explorer to open its compact window, or choose **More A
 
 | File Explorer right-click menu | Processing window |
 | --- | --- |
-| ![Context Actions in the File Explorer right-click menu for a video](docs/showcase/explorer.jpg) | ![Compact MP4 processing window showing a completed conversion](docs/showcase/video.jpg) |
+| ![Context Actions submenu with Convert to MP4 / H.264 highlighted](docs/showcase/explorer.jpg) | ![Completed conversion with Open result and Show in folder links](docs/showcase/video.jpg) |
 
-The screenshots and tour show the WinUI 3 development preview. The app and its Explorer menu support English, Russian, German, French, and Simplified Chinese. The interface offers theme controls and a way to check Office availability again.
+The tour and stills recreate the File Explorer and WinUI 3 preview screens with sample files. The app and its Explorer menu support English, Russian, German, French, and Simplified Chinese. The interface offers theme controls and a way to check Office availability again.
 
 ## Build the preview
 
