@@ -27,7 +27,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install GTK, media and packaging tools
-        timeout-minutes: 6
+        timeout-minutes: 20
         run: |
           sources="$RUNNER_TEMP/context-actions-ubuntu.list"
           keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
