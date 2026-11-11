@@ -2,7 +2,7 @@
 
 Compress videos, resize images, combine scans into a PDF, and rename files in batches with a native Windows 11 x64 app. Start with a right-click in File Explorer or open the full workspace to build a file list.
 
-[![Watch the 10-second walkthrough of converting a video to MP4 in Context Actions](docs/showcase/demo.gif)](docs/showcase/demo.mp4)
+[![Watch the 10-second walkthrough of converting a video to MP4 in Context Actions](docs/showcase/mp4-walkthrough.gif)](docs/showcase/demo.mp4)
 
 [Open the interactive HTML tour](docs/showcase/index.html) in a browser from your local checkout. It recreates the File Explorer and WinUI 3 preview screens with a sample file.
 
