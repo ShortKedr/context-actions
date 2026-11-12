@@ -8,5 +8,8 @@ struct App : AppT<App> {
     void OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&);
     Microsoft::UI::Xaml::Window window{nullptr};
     Microsoft::Windows::ApplicationModel::Resources::ResourceManager resources{nullptr};
+private:
+    void ShowWorkspace(ca::Options options, bool immediate);
+    void ShowActionChooser();
 };
 }

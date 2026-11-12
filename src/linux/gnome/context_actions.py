@@ -25,7 +25,7 @@ class ContextActionsMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         item = Nautilus.MenuItem(
             name="ContextActions::Open",
             label="Context Actions",
-            tip="Open the selected files in Context Actions",
+            tip="Choose an action for the selected files",
             icon="io.github.ShortKedr.ContextActions",
         )
         item.connect("activate", self.open_files, paths)
@@ -35,4 +35,4 @@ class ContextActionsMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         # The portable installer links this module from beside the executable.
         portable = Path(__file__).resolve().with_name("context-actions")
         executable = str(portable) if os.access(portable, os.X_OK) else "context-actions"
-        GLib.spawn_async([executable, "--", *paths], flags=GLib.SpawnFlags.SEARCH_PATH)
+        GLib.spawn_async([executable, "--choose-action", "--", *paths], flags=GLib.SpawnFlags.SEARCH_PATH)

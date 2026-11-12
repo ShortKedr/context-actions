@@ -1,4 +1,4 @@
-Context Actions 0.1 preview
+Context Actions preview
 
 The application keeps source files intact, except for explicitly requested renames.
 See docs/support.md for supported conversions and limitations.

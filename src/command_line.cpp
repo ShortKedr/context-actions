@@ -11,6 +11,7 @@ void writeReport(std::FILE* report, const std::string& text) {
 
 void parseArguments(const std::vector<std::wstring>& arguments, CommandLine& command) {
     auto& options = command.options;
+    bool explicitAction = false;
     for (size_t i = 0; i < arguments.size(); ++i) {
         const auto& arg = arguments[i];
         auto value = [&]() -> const std::wstring& {
@@ -31,13 +32,17 @@ void parseArguments(const std::vector<std::wstring>& arguments, CommandLine& com
         if (arg == L"--headless") command.headless = true;
         else if (arg == L"--help" || arg == L"-h") command.help = true;
         else if (arg == L"--run") command.immediate = true;
+        else if (arg == L"--choose-action") command.chooseAction = true;
         else if (arg == L"--report") command.report = textPath(value());
         else if (arg == L"--job") {
             const auto file = textPath(value());
             options = readJob(file);
             consumeJob(file);
         }
-        else if (arg == L"--action") options.action = parseAction(value());
+        else if (arg == L"--action") {
+            options.action = parseAction(value());
+            explicitAction = true;
+        }
         else if (arg == L"--output") options.output = fs::absolute(textPath(value()));
         else if (arg == L"--quality") options.quality = integer();
         else if (arg == L"--width") options.width = integer();
@@ -55,6 +60,12 @@ void parseArguments(const std::vector<std::wstring>& arguments, CommandLine& com
         else if (arg.starts_with(L"--")) throw std::runtime_error("Unknown option: " + utf8(arg));
         else options.files.push_back(fs::absolute(textPath(arg)));
     }
+    if (command.chooseAction && !command.help) {
+        if (command.immediate || command.headless || explicitAction || options.action != Action::more)
+            throw std::runtime_error("--choose-action cannot be combined with --action, --headless, --run or a job with a selected action");
+        if (options.files.empty() || options.files.size() > 100000)
+            throw std::runtime_error("--choose-action requires between 1 and 100000 files");
+    }
     if (command.immediate && !command.headless && !command.help && options.action == Action::repack)
         validate(options);
 }
@@ -64,6 +75,7 @@ std::optional<int> runCommandLine(const CommandLine& command) {
         std::cout << "Context Actions [options] [--] [files...]\n"
                   << "  --action compress|h264|h265|telegram|image|pdf|rename|word|excel\n"
                   << "           audio|remux|frame|media-info|repack\n"
+                  << "  --choose-action            Show the action chooser for the selected files\n"
                   << "  --headless --report PATH    Run a batch and write a new report\n"
                   << "  --run                      Start the batch when the window opens\n"
                   << "  --output DIRECTORY         Use a separate output directory\n"

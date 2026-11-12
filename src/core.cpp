@@ -223,6 +223,18 @@ std::wstring unavailableReason(Action action, const std::vector<fs::path>& files
         if (officeCapability(action == Action::excel) == Capability::unavailable) return officeUnavailableReason(action == Action::excel);
     return {};
 }
+std::vector<ActionChoice> actionChoices(const std::vector<fs::path>& files) {
+    if (files.empty() || files.size() > 100000 || std::any_of(files.begin(), files.end(), [](const auto& path) {
+        std::error_code error;
+        return !fs::is_regular_file(path, error);
+    })) return {};
+    std::vector<ActionChoice> choices;
+    for (const auto action : catalog()) {
+        if (action == Action::documents || action == Action::sheets || !accepts(action, files)) continue;
+        choices.push_back({action, trAction(action), unavailableReason(action, files)});
+    }
+    return choices;
+}
 void validate(const Options& o) {
     const auto reason = unavailableReason(o.action,o.files);
     if (!reason.empty()) fail(reason);
@@ -474,12 +486,7 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                 }
                 engineSuccess(runProcess(engine("qpdf"), arguments, cancel));
             } else if (o.action == Action::repack) {
-#ifdef _WIN32
-                const auto helper = appDirectory() / L"ContextActionsArchive.exe";
-#else
-                const auto helper = appDirectory() / "ContextActionsArchive";
-#endif
-                engineSuccess(runProcess(helper, {archiveFormat(source), extension.substr(1),
+                engineSuccess(runProcess(archiveExecutable(), {archiveFormat(source), extension.substr(1),
                     pathText(source), pathText(temporary)}, cancel, {}, 30 * 60 * 1000, 1024ull * 1024 * 1024));
             } else if(o.action==Action::image||o.action==Action::frame) imageConversion(o,source,temporary,cancel);
             else if(o.action==Action::mediaInfo) mediaReport(source,temporary,cancel);

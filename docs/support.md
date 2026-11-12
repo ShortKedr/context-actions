@@ -1,4 +1,4 @@
-# Context Actions 0.1 supported formats and file operations
+# Context Actions supported formats and file operations
 
 Context Actions supports Windows 11 x64, macOS 11+ on Intel and Apple Silicon, and Linux x86-64 and ARM64 with GTK 4.6+. See the platform build and dependency details. [Build instructions](build.md)
 
@@ -17,11 +17,11 @@ Context Actions supports Windows 11 x64, macOS 11+ on Intel and Apple Silicon, a
 | Repack archive | ZIP, TAR, TAR.GZ (`.tar.gz`, `.tgz`), 7Z, RAR (RAR4 and RAR5) | ZIP, TAR.GZ, 7Z | One new archive per source. The selected target must differ from the format of every source. A `.tgz` source counts as TAR.GZ. |
 | Create or merge PDFs | PDF and any of the supported image inputs above, in any combination | One PDF | The input list sets the page order. Each source PDF contributes all its pages at their original sizes. Images become JPEGs on A4 pages with 24 pt margins and automatic orientation. The first-frame or first-page option applies to GIF, TIFF, and WebP inputs. Forms, signatures, bookmarks, and document structure are outside the supported merge behavior. A PDF that requires a password causes the merge to fail. If an input fails, the combined PDF is withheld. |
 | Export documents to PDF | DOCX, DOC, ODT, RTF, TXT | PDF | Uses installed Microsoft Word on Windows or LibreOffice Writer on macOS and Linux. Password-protected documents are unsupported. Layout depends on the Office backend and installed fonts. |
-| Export spreadsheets to PDF | XLSX, XLS, ODS, CSV | PDF | Uses installed Microsoft Excel on Windows or LibreOffice Calc on macOS and Linux. The Office backend determines print areas and pagination. Sheet selection and print configuration are outside the 0.1 feature set. |
+| Export spreadsheets to PDF | XLSX, XLS, ODS, CSV | PDF | Uses installed Microsoft Excel on Windows or LibreOffice Calc on macOS and Linux. The Office backend determines print areas and pagination. Sheet selection and print configuration are unavailable. |
 
 Video support depends on the codec inside the input container. Damaged files and unsupported codecs report an error. Video settings include quality (CRF 0–51), maximum width, frame rate, mute, and a size limit in MiB. Output dimensions are even. The size limit uses a separate bitrate calculation and checks the actual output size after encoding. It allows up to four attempts and fails without publishing a file if it cannot meet the limit at or above 64 kb/s. HDR is outside the validated format matrix.
 
-Image resizing preserves the aspect ratio and only scales down. The quality setting applies to JPEG and WebP, with lower values giving higher quality. FFmpeg applies recognized orientation and strips metadata and ICC profiles. JPEG, BMP, and PDF put transparent areas on a white background. HEIF and AVIF are outside the 0.1 format list.
+Image resizing preserves the aspect ratio and only scales down. The quality setting applies to JPEG and WebP, with lower values giving higher quality. FFmpeg applies recognized orientation and strips metadata and ICC profiles. JPEG, BMP, and PDF put transparent areas on a white background. HEIF and AVIF are unsupported.
 
 On Windows, Word and Excel exports use separate automation sessions. Files open read-only with macros, link updates, and recent-file tracking disabled. Availability is cached separately in `%LOCALAPPDATA%\Context Actions\capabilities.ini` after an attempt to start the respective app. **Check again (Office)** clears that cache. Cancel waits for an in-flight Office call to return. On macOS and Linux, LibreOffice exports run headless with a separate temporary user profile for each file. Cancel stops the conversion process.
 

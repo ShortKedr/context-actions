@@ -1,4 +1,4 @@
-#include "windows/platform_win.h"
+#include "platform_win.h"
 #include <shellapi.h>
 
 int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
@@ -17,7 +17,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
         struct Args { LPWSTR* value; ~Args() { LocalFree(value); } } owner{argv};
         ca::parseArguments(std::vector<std::wstring>(argv + 1, argv + argc), command);
         if (const auto status = ca::runCommandLine(command)) return *status;
-        return ca::runUi(std::move(command.options), command.immediate);
+        return ca::runUi(std::move(command.options), command.immediate, command.chooseAction);
     } catch (const std::exception& e) {
         if (command.headless) ca::reportCommandError(command, e);
         else MessageBoxW(nullptr, ca::wide(e.what()).c_str(), L"Context Actions", MB_OK|MB_ICONERROR);

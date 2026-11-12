@@ -8,7 +8,7 @@ $cache = Join-Path $root '.build-tools'
 $stage = Join-Path $root 'dist\ContextActions'
 $reports = Join-Path $root 'dist\reports'
 $installer = Join-Path $root "dist\ContextActions-$($config.version)-win-x64-setup.exe"
-[xml]$uiPackageConfig = Get-Content -LiteralPath (Join-Path $root 'src\ui\packages.config') -Raw
+[xml]$uiPackageConfig = Get-Content -LiteralPath (Join-Path $root 'src\windows\ui\packages.config') -Raw
 $uiPackages = @($uiPackageConfig.packages.package | ForEach-Object { [pscustomobject]@{ id=$_.id; version=$_.version } })
 function Reset-OutputDirectory([string]$Path) {
     $resolved = [IO.Path]::GetFullPath($Path)
@@ -117,9 +117,9 @@ try {
         New-Item -ItemType Directory -Force -Path $licenseDirectory | Out-Null
         Get-ChildItem -LiteralPath $packageDirectory -File | Where-Object { $_.Name -match '^(license|notice)' } | Copy-Item -Destination $licenseDirectory
     }
-    Copy-Item -LiteralPath 'src\ui\packages.config' -Destination (Join-Path $licenses 'windows-app-sdk\packages.config')
+    Copy-Item -LiteralPath 'src\windows\ui\packages.config' -Destination (Join-Path $licenses 'windows-app-sdk\packages.config')
     Copy-Item -LiteralPath 'dependencies.json' -Destination $stage
-    Copy-Item -LiteralPath 'packaging\register-shell.ps1' -Destination (Join-Path $stage 'packaging')
+    Copy-Item -LiteralPath 'packaging\windows\register-shell.ps1' -Destination (Join-Path $stage 'packaging')
     Copy-Item -LiteralPath 'docs\build.md','docs\preview-license.txt' -Destination (Join-Path $stage 'docs')
     if (-not $SkipTests) {
         & (Join-Path $PSScriptRoot 'smoke-test.ps1') -AppDirectory $stage -ReportDirectory $reports
@@ -129,7 +129,7 @@ try {
     }
     $identity = Join-Path $root 'build\identity'; Reset-OutputDirectory $identity
     New-Item -ItemType Directory -Path (Join-Path $identity 'Assets') | Out-Null
-    Copy-Item -LiteralPath 'packaging\AppxManifest.xml' -Destination $identity
+    Copy-Item -LiteralPath 'packaging\windows\AppxManifest.xml' -Destination $identity
     Copy-Item -LiteralPath 'resources\logo-44.png','resources\logo-150.png' -Destination (Join-Path $identity 'Assets')
     $sdk = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\$($config.toolchain.sdk)\x64\MakeAppx.exe"
     # Sparse packages refer to external EXE/DLL files. /nv is Microsoft's documented recipe;
@@ -175,7 +175,7 @@ try {
     $inventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $reports 'components.json') -Encoding utf8
     $toolchain = [ordered]@{ cmake=(& $cmake --version | Select-Object -First 1); visualStudioVersion=$installation[0].installationVersion; sdk=$config.toolchain.sdk; uiBackend='WinUI 3 / C++/WinRT'; windowsAppSdkSelfContained=$true; uiPackages=$uiPackages; dependencies=$config; releaseInstallerDownloadsEngines=[bool]$Release }
     $toolchain | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $reports 'build-inputs.json') -Encoding utf8
-    Invoke-Tool (Join-Path $inno 'ISCC.exe') ($installerArgs + 'packaging\context-actions.iss')
+    Invoke-Tool (Join-Path $inno 'ISCC.exe') ($installerArgs + 'packaging\windows\context-actions.iss')
     $installerBytes = (Get-Item -LiteralPath $installer).Length
     $installedBytes = ($inventory | Measure-Object -Property bytes -Sum).Sum + $downloadedPayloadBytes
     $size = [ordered]@{ version=$config.version; installerBytes=$installerBytes; installedPayloadBytes=$installedBytes; downloadedPayloadBytes=$downloadedPayloadBytes; installerMB=[math]::Round($installerBytes/1000000,2); installedPayloadMB=[math]::Round($installedBytes/1000000,2); installerMiB=[math]::Round($installerBytes/1MB,2); installedPayloadMiB=[math]::Round($installedBytes/1MB,2); targetMB=100; limitMB=300; withinLimit=($installerBytes -le 300000000); shellTested=$false; officeTested=$false }

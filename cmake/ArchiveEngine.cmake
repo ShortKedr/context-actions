@@ -138,6 +138,13 @@ set(HAVE_LZMA_STREAM_ENCODER_MT FALSE)
   add_library(ContextActions::Archive ALIAS archive_static)
 
   add_executable(ContextActionsArchive src/archive_engine.cpp)
+  if(WIN32)
+    target_sources(ContextActionsArchive PRIVATE src/windows/archive_platform.cpp)
+  elseif(APPLE)
+    target_sources(ContextActionsArchive PRIVATE src/posix/archive_platform.cpp src/macos/archive_main.cpp)
+  else()
+    target_sources(ContextActionsArchive PRIVATE src/posix/archive_platform.cpp src/linux/archive_main.cpp)
+  endif()
   target_link_libraries(ContextActionsArchive PRIVATE ContextActions::Archive ZLIB::ZLIBSTATIC)
   if(MSVC)
     target_compile_options(ContextActionsArchive PRIVATE /W4 /utf-8 /permissive- /EHsc

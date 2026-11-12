@@ -158,7 +158,8 @@ executable=${executable//%/%%}
 write_desktop_file() {
     local line
     while IFS= read -r line; do
-        if [[ $line == Exec=* ]]; then printf 'Exec=/usr/bin/env -- "%s" -- %%F\n' "$executable"
+        if [[ $line == 'Exec=context-actions '* ]]; then
+            printf 'Exec=/usr/bin/env -- "%s" %s\n' "$executable" "${line#Exec=context-actions }"
         else printf '%s\n' "$line"; fi
     done < "$1" > "$2"
 }

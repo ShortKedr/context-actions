@@ -40,7 +40,7 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: .build-tools/downloads
-          key: windows-verified-inputs-${{ hashFiles('dependencies.json', 'src/ui/packages.config', 'scripts/build-ui.ps1') }}
+          key: windows-verified-inputs-${{ hashFiles('dependencies.json', 'src/windows/ui/packages.config', 'scripts/build-ui.ps1') }}
       - name: Build, lightweight tests and installer
         shell: pwsh
         run: ./scripts/build-and-package.ps1 -Release

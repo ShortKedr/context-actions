@@ -47,6 +47,7 @@ fs::path appDirectory() {
     if (!GetModuleFileNameW(nullptr,path,32768)) fail(systemError(GetLastError()));
     return fs::path(path).parent_path();
 }
+fs::path archiveExecutable() { return appDirectory() / L"ContextActionsArchive.exe"; }
 void launch(const fs::path& executable, const std::vector<std::wstring>& args) {
     std::wstring line=quote(executable.wstring()); for (const auto& arg:args) line+=L" "+quote(arg);
     if (line.size()>=32767) fail(tr("invalid"));

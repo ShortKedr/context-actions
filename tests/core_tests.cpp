@@ -51,6 +51,25 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         expect(!ca::accepts(ca::Action::h264,{L"a.mp4",L"b.png"}),"Mixed video rejection");
         expect(ca::accepts(ca::Action::pdf,{L"a.pdf",L"b.png"}),"Mixed PDF batch");
         expect(!ca::unavailableReason(ca::Action::sheets,{L"a.xls"}).empty(),"Deferred engine is visible and unavailable");
+        expect(ca::actionChoices({}).empty(), "Chooser requires a file selection");
+        const auto chooserVideo = scratch / "video.mp4";
+        const auto chooserImage = scratch / "image.png";
+        const auto chooserDirectory = scratch / "folder.mp4";
+        write(chooserVideo, "video fixture");
+        write(chooserImage, "image fixture");
+        ca::fs::create_directory(chooserDirectory);
+        expect(ca::actionChoices({chooserVideo, chooserDirectory}).empty(), "Chooser requires regular files");
+        const auto mixedChoices = ca::actionChoices({chooserVideo, chooserImage});
+        expect(mixedChoices.size() == 2 && mixedChoices[0].action == ca::Action::mediaInfo &&
+               mixedChoices[1].action == ca::Action::rename, "Chooser filters for the entire selection in catalog order");
+        expect(mixedChoices[0].label == ca::trAction(ca::Action::mediaInfo), "Chooser uses localized action names");
+        const std::vector<ca::fs::path> chooserArchives{scratch / "a.zip", scratch / "b.tar.gz", scratch / "c.7z"};
+        for (const auto& archive : chooserArchives) write(archive, "archive fixture");
+        const auto archiveChoices = ca::actionChoices(chooserArchives);
+        expect(archiveChoices.size() == 2 && archiveChoices[0].action == ca::Action::repack &&
+               archiveChoices[0].unavailable == ca::tr("archiveFormatsExhausted") &&
+               archiveChoices[1].action == ca::Action::rename && archiveChoices[1].unavailable.empty(),
+               "Chooser keeps a compatible but unavailable action disabled");
         #ifdef _WIN32
         std::vector<std::wstring> arguments{L"C:\\Program Files\\app.exe",L"",L"path with spaces\\",L"quotes\"here",L"Кириллица & % ! $ ` (тест).mp4",L"back\\\"quote"};
         std::wstring line;for(const auto& a:arguments)line+=ca::quote(a)+L" ";int parsedCount=0;auto parsed=CommandLineToArgvW(line.c_str(),&parsedCount);
@@ -149,6 +168,23 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         ca::CommandLine command;
         ca::parseArguments({L"--action",L"rename",L"--pattern",L"{name}_{n}",L"--",L"--literal"},command);
         expect(command.options.action==ca::Action::rename && command.options.files[0].filename()=="--literal","CLI supports option-like filenames");
+        ca::CommandLine chooser;
+        ca::parseArguments({L"--choose-action", L"--", L"First file.mp4", L"--literal"}, chooser);
+        expect(chooser.chooseAction && !chooser.immediate && chooser.options.action == ca::Action::more &&
+               chooser.options.files.size() == 2 && chooser.options.files[0].filename() == "First file.mp4" &&
+               chooser.options.files[1].filename() == "--literal" && !ca::runCommandLine(chooser),
+               "Chooser launch preserves paths and hands off to the GUI without running an action");
+        const auto chooserJob = ca::writeJob(chooser.options);
+        ca::CommandLine shellChooser;
+        ca::parseArguments({L"--choose-action", L"--job", ca::pathText(chooserJob)}, shellChooser);
+        expect(shellChooser.chooseAction && shellChooser.options.files == chooser.options.files &&
+               !ca::fs::exists(chooserJob), "Explorer chooser handoff preserves files and consumes the job");
+        for (const auto& args : std::vector<std::vector<std::wstring>>{
+                 {L"--choose-action"}, {L"--choose-action", L"--headless", L"file.mp4"},
+                 {L"--run", L"--choose-action", L"file.mp4"},
+                 {L"--choose-action", L"--action", L"more", L"file.mp4"}}) {
+            rejects([&] { ca::CommandLine invalid; ca::parseArguments(args, invalid); });
+        }
         std::cout<<"PASS: classification, selection, arguments, bounded jobs, presets, action-specific validation, no overwrite, rename/undo, typed failure details, Office state, five languages, child cancellation\n";
         return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -84,6 +84,38 @@ NSArray<NSURL*>* pastedFiles(NSPasteboard* pasteboard) {
         options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
 }
 
+std::vector<ca::fs::path> filePaths(NSArray<NSURL*>* urls) {
+    std::vector<ca::fs::path> paths;
+    paths.reserve(urls.count);
+    for (NSURL* url in urls) {
+        if (!url.isFileURL) continue;
+        if (const char* path = url.fileSystemRepresentation) paths.emplace_back(path);
+    }
+    return paths;
+}
+
+void placeAtPointer(NSWindow* window) {
+    const NSPoint pointer = NSEvent.mouseLocation;
+    NSScreen* screen = NSScreen.mainScreen;
+    for (NSScreen* candidate in NSScreen.screens) {
+        if (NSPointInRect(pointer, candidate.frame)) {
+            screen = candidate;
+            break;
+        }
+    }
+    if (!screen) {
+        [window center];
+        return;
+    }
+    const NSRect bounds = screen.visibleFrame;
+    const NSSize size = window.frame.size;
+    const CGFloat left = NSMinX(bounds);
+    const CGFloat bottom = NSMinY(bounds);
+    [window setFrameOrigin:NSMakePoint(
+        std::clamp(pointer.x, left, std::max(left, NSMaxX(bounds) - size.width)),
+        std::clamp(pointer.y - size.height, bottom, std::max(bottom, NSMaxY(bounds) - size.height)))];
+}
+
 void showError(NSWindow* window, NSString* message) {
     NSAlert* alert = [[NSAlert alloc] init];
     alert.alertStyle = NSAlertStyleWarning;
@@ -100,7 +132,7 @@ void showError(NSWindow* window, NSString* message) {
 - (void)addURLs:(NSArray<NSURL*>*)urls;
 - (void)addFiles:(id)sender;
 - (void)run:(id)sender;
-- (NSApplicationTerminateReply)requestTermination;
+- (BOOL)cancelForTermination;
 @end
 
 @implementation Workspace {
@@ -115,7 +147,7 @@ void showError(NSWindow* window, NSString* message) {
     std::vector<double> _fractions;
     std::atomic_bool _cancel;
     double _totalFraction;
-    BOOL _busy, _closeAfter, _quitAfter;
+    BOOL _busy, _closeAfter;
 
     NSTableView* _files;
     NSPopUpButton* _action;
@@ -477,12 +509,7 @@ void showError(NSWindow* window, NSString* message) {
 }
 
 - (void)addURLs:(NSArray<NSURL*>*)urls {
-    std::vector<ca::fs::path> paths;
-    for (NSURL* url in urls) {
-        if (url.isFileURL && url.fileSystemRepresentation)
-            paths.emplace_back(url.fileSystemRepresentation);
-    }
-    [self addPaths:paths];
+    [self addPaths:filePaths(urls)];
 }
 
 - (void)addFiles:(id)sender {
@@ -651,7 +678,7 @@ void showError(NSWindow* window, NSString* message) {
         }
         _progress.doubleValue = 100;
     }
-    if (!_quitAfter && !_closeAfter) {
+    if (!_closeAfter) {
         auto pending = std::move(_pendingFiles);
         _pendingFiles.clear();
         [self addPaths:pending];
@@ -660,8 +687,7 @@ void showError(NSWindow* window, NSString* message) {
         + L" \u00b7 " + std::to_wstring(result.succeeded) + L" " + ca::tr("succeeded")
         + L" \u00b7 " + std::to_wstring(result.failed) + L" " + ca::tr("failed"));
     [self refresh];
-    if (_quitAfter) [NSApp replyToApplicationShouldTerminate:YES];
-    else if (_closeAfter) [self.window close];
+    if (_closeAfter) [self.window close];
     else if (!error.empty()) showError(self.window, text(error));
 }
 
@@ -679,11 +705,11 @@ void showError(NSWindow* window, NSString* message) {
     return NO;
 }
 
-- (NSApplicationTerminateReply)requestTermination {
-    if (!_busy) return NSTerminateNow;
-    _quitAfter = YES;
+- (BOOL)cancelForTermination {
+    if (!_busy) return NO;
+    _closeAfter = YES;
     [self cancel:nil];
-    return NSTerminateLater;
+    return YES;
 }
 
 - (void)openResult:(id)sender {
@@ -702,21 +728,176 @@ void showError(NSWindow* window, NSString* message) {
 
 @interface ApplicationDelegate : NSObject <NSApplicationDelegate>
 - (instancetype)initWithCommand:(const ca::CommandLine&)command;
+- (void)chooseFileAction:(NSPasteboard*)pasteboard userData:(NSString*)userData error:(NSString**)error;
 @end
 
 @implementation ApplicationDelegate {
     ca::CommandLine _command;
-    Workspace* _workspace;
+    NSMutableArray<Workspace*>* _workspaces;
+    NSMutableSet<NSWindow*>* _closingForTermination;
     NSMutableArray<NSURL*>* _pendingURLs;
+    BOOL _finishedLaunching;
+    NSPanel* _chooser;
+    ca::Options _chooserOptions;
+    std::vector<ca::ActionChoice> _choices;
 }
 
 - (instancetype)initWithCommand:(const ca::CommandLine&)command {
     self = [super init];
     if (self) {
         _command = command;
+        _workspaces = [NSMutableArray array];
+        _closingForTermination = [NSMutableSet set];
         _pendingURLs = [NSMutableArray array];
     }
     return self;
+}
+
+- (Workspace*)openWorkspace:(const ca::Options&)options adding:(NSArray<NSURL*>*)urls {
+    Workspace* workspace = [[Workspace alloc] initWithOptions:options];
+    [_workspaces addObject:workspace];
+    [workspace addURLs:urls];
+    [workspace showWindow:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    return workspace;
+}
+
+- (Workspace*)frontWorkspace {
+    for (Workspace* workspace in _workspaces) {
+        if (workspace.window == NSApp.keyWindow) return workspace;
+    }
+    return _workspaces.lastObject;
+}
+
+- (void)openFiles:(id)sender {
+    Workspace* workspace = [self frontWorkspace];
+    if (!workspace) workspace = [self openWorkspace:ca::Options{} adding:nil];
+    [workspace addFiles:sender];
+}
+
+- (void)cancelChooser:(id)sender {
+    [_chooser close];
+}
+
+- (void)openChosenAction:(NSButton*)sender {
+    if (sender.window != _chooser || sender.tag < 0 || static_cast<size_t>(sender.tag) >= _choices.size()) return;
+    const auto& choice = _choices[static_cast<size_t>(sender.tag)];
+    if (!choice.unavailable.empty()) return;
+
+    try {
+        auto options = _chooserOptions;
+        options.action = choice.action;
+        [self openWorkspace:options adding:nil];
+        [_chooser close];
+    } catch (const std::exception& failure) {
+        showError(_chooser, text(ca::wide(failure.what())));
+    }
+}
+
+- (void)presentChooser:(const ca::Options&)options {
+    auto choices = ca::actionChoices(options.files);
+    _chooserOptions = options;
+    _choices = std::move(choices);
+    if (!_chooser) {
+        _chooser = [[NSPanel alloc] initWithContentRect:NSZeroRect
+            styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskUtilityWindow
+            backing:NSBackingStoreBuffered defer:NO];
+        _chooser.title = label("chooseAction");
+        _chooser.floatingPanel = YES;
+        _chooser.releasedWhenClosed = NO;
+        _chooser.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace;
+    }
+
+    NSMutableArray<NSArray<NSView*>*>* rows = [NSMutableArray array];
+    NSMutableArray<NSButton*>* focusable = [NSMutableArray array];
+    NSMutableArray<NSView*>* pair = [NSMutableArray arrayWithCapacity:2];
+    for (size_t index = 0; index < _choices.size(); ++index) {
+        const auto& choice = _choices[index];
+        NSButton* control = [NSButton buttonWithTitle:text(choice.label) target:self action:@selector(openChosenAction:)];
+        control.tag = static_cast<NSInteger>(index);
+        control.enabled = choice.unavailable.empty();
+        if (control.enabled) [focusable addObject:control];
+        else {
+            control.toolTip = text(choice.unavailable);
+            control.accessibilityHelp = control.toolTip;
+        }
+        [control.widthAnchor constraintGreaterThanOrEqualToConstant:154].active = YES;
+        [control.heightAnchor constraintGreaterThanOrEqualToConstant:36].active = YES;
+        [pair addObject:control];
+        if (pair.count == 2) {
+            [rows addObject:[pair copy]];
+            [pair removeAllObjects];
+        }
+    }
+    if (pair.count == 1) [rows addObject:@[pair.firstObject, NSGridCell.emptyContentView]];
+
+    NSView* body = [NSTextField labelWithString:label("noApplicableActions")];
+    if (rows.count) {
+        NSGridView* grid = [NSGridView gridViewWithViews:rows];
+        grid.rowSpacing = 8;
+        grid.columnSpacing = 8;
+        grid.xPlacement = NSGridCellPlacementFill;
+        body = grid;
+    }
+    NSButton* cancel = button("cancel", self, @selector(cancelChooser:));
+    cancel.keyEquivalent = @"\x1b";
+    cancel.keyEquivalentModifierMask = 0;
+    [focusable addObject:cancel];
+    for (NSUInteger index = 0; index < focusable.count; ++index)
+        focusable[index].nextKeyView = focusable[(index + 1) % focusable.count];
+
+    NSStackView* layout = column(@[body, cancel]);
+    layout.spacing = 12;
+    const CGFloat margin = 16;
+    const NSSize size = layout.fittingSize;
+    _chooser.contentView = [[NSView alloc] initWithFrame:NSZeroRect];
+    [_chooser setContentSize:NSMakeSize(size.width + 2 * margin, size.height + 2 * margin)];
+    pin(layout, _chooser.contentView, margin);
+    placeAtPointer(_chooser);
+    NSButton* first = focusable.firstObject;
+    _chooser.initialFirstResponder = first;
+    [_chooser makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    if (first.acceptsFirstResponder) [_chooser makeFirstResponder:first];
+}
+
+- (void)chooseFileAction:(NSPasteboard*)pasteboard userData:(NSString*)userData error:(NSString**)error {
+    NSArray<NSURL*>* urls = pastedFiles(pasteboard);
+    auto paths = filePaths(urls);
+    if (paths.empty() || paths.size() != urls.count) {
+        if (error) *error = label("select");
+        return;
+    }
+    ca::Options options;
+    options.files = std::move(paths);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_closingForTermination.count) return;
+        try { [self presentChooser:options]; }
+        catch (const std::exception& failure) { showError(nil, text(ca::wide(failure.what()))); }
+    });
+}
+
+- (void)windowWillClose:(NSNotification*)notification {
+    NSWindow* window = notification.object;
+    if (window == _chooser) {
+        _chooser = nil;
+        _chooserOptions = {};
+        _choices.clear();
+        if (!_workspaces.count) dispatch_async(dispatch_get_main_queue(), ^{
+            if (!self->_chooser && !self->_workspaces.count) [NSApp terminate:nil];
+        });
+        return;
+    }
+    const auto index = [_workspaces indexOfObjectPassingTest:^BOOL(Workspace* workspace, NSUInteger, BOOL*) {
+        return workspace.window == window;
+    }];
+    if (index != NSNotFound) [_workspaces removeObjectAtIndex:index];
+    if ([_closingForTermination containsObject:window]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self->_closingForTermination removeObject:window];
+            if (!self->_closingForTermination.count) [NSApp replyToApplicationShouldTerminate:YES];
+        });
+    }
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
@@ -731,7 +912,8 @@ void showError(NSWindow* window, NSString* message) {
 
     NSMenuItem* file = [menuBar addItemWithTitle:@"File" action:NULL keyEquivalent:@""];
     NSMenu* fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
-    NSMenuItem* open = [fileMenu addItemWithTitle:label("add") action:@selector(addFiles:) keyEquivalent:@"o"];
+    NSMenuItem* open = [fileMenu addItemWithTitle:label("add") action:@selector(openFiles:) keyEquivalent:@"o"];
+    open.target = self;
     [fileMenu addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
     file.submenu = fileMenu;
 
@@ -746,27 +928,52 @@ void showError(NSWindow* window, NSString* message) {
     edit.submenu = editMenu;
     NSApp.mainMenu = menuBar;
 
-    _workspace = [[Workspace alloc] initWithOptions:_command.options];
-    open.target = _workspace;
-    [_workspace addURLs:_pendingURLs];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(windowWillClose:)
+        name:NSWindowWillCloseNotification object:nil];
+    _finishedLaunching = YES;
+    // A cold Finder Services invocation supplies its selection after app launch.
+    NSNumber* defaultLaunch = notification.userInfo[NSApplicationLaunchIsDefaultLaunchKey];
+    if (_command.chooseAction) [self presentChooser:_command.options];
+    else if (!defaultLaunch || defaultLaunch.boolValue || _pendingURLs.count ||
+        !_command.options.files.empty() || _command.options.action != ca::Action::more) {
+        Workspace* workspace = [self openWorkspace:_command.options adding:_pendingURLs];
+        if (_command.immediate) dispatch_async(dispatch_get_main_queue(), ^{ [workspace run:nil]; });
+    }
     [_pendingURLs removeAllObjects];
-    [_workspace showWindow:nil];
-    [NSApp activateIgnoringOtherApps:YES];
-    if (_command.immediate) dispatch_async(dispatch_get_main_queue(), ^{ [self->_workspace run:nil]; });
+    NSApp.servicesProvider = self;
 }
 
 - (void)application:(NSApplication*)application openURLs:(NSArray<NSURL*>*)urls {
-    if (_workspace) {
-        [_workspace addURLs:urls];
-        [_workspace showWindow:nil];
-    } else {
+    if (!_finishedLaunching) {
         [_pendingURLs addObjectsFromArray:urls];
+    } else if (Workspace* workspace = [self frontWorkspace]) {
+        [workspace addURLs:urls];
+        [workspace showWindow:nil];
+    } else {
+        [self openWorkspace:_command.options adding:urls];
     }
 }
 
-- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)application { return YES; }
+- (BOOL)applicationShouldHandleReopen:(NSApplication*)application hasVisibleWindows:(BOOL)visible {
+    if (!visible) {
+        if (Workspace* workspace = [self frontWorkspace]) [workspace showWindow:nil];
+        else if (!_chooser) [self openWorkspace:ca::Options{} adding:nil];
+    }
+    return YES;
+}
+
+- (void)applicationDidResignActive:(NSNotification*)notification {
+    [_chooser close];
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)application {
+    return !_chooser && !_closingForTermination.count;
+}
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)application {
-    return _workspace ? [_workspace requestTermination] : NSTerminateNow;
+    for (Workspace* workspace in _workspaces) {
+        if ([workspace cancelForTermination]) [_closingForTermination addObject:workspace.window];
+    }
+    return _closingForTermination.count ? NSTerminateLater : NSTerminateNow;
 }
 @end
 

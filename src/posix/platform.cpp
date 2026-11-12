@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "posix_platform.h"
 
 #include <array>
 #include <cerrno>
@@ -10,7 +10,6 @@
 #include <fstream>
 #include <locale>
 #include <sstream>
-#include <string_view>
 #include <system_error>
 
 #include <fcntl.h>
@@ -21,18 +20,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-#ifdef __APPLE__
-#include <CoreFoundation/CoreFoundation.h>
-#include <crt_externs.h>
-#include <libproc.h>
-#include <mach-o/dyld.h>
-#include <sys/resource.h>
-#else
-#include <linux/fs.h>
-#include <sys/syscall.h>
-extern char** environ;
-#endif
 
 namespace ca {
 namespace {
@@ -80,16 +67,6 @@ struct ChildProcess {
     }
 };
 
-fs::path homeDirectory() {
-    if (const auto* home = std::getenv("HOME"); home && fs::path(home).is_absolute()) return home;
-    throw std::runtime_error("The home directory is unavailable.");
-}
-
-bool executable(const fs::path& path) {
-    std::error_code error;
-    return fs::is_regular_file(path, error) && access(path.c_str(), X_OK) == 0;
-}
-
 void protectPrivateMode(int descriptor, mode_t allowed) {
     struct stat info{};
     require(fstat(descriptor, &info) == -1 ? errno : 0, "Inspect private path");
@@ -120,40 +97,23 @@ std::wstring pathText(const fs::path& path) { return wide(path.native()); }
 fs::path textPath(const std::wstring& text) { return fs::path(utf8(text)); }
 std::wstring pathKey(const fs::path& path) {
     auto key = pathText(fs::weakly_canonical(path.parent_path()) / path.filename());
-#ifdef __APPLE__
-    if (pathconf(path.parent_path().c_str(), _PC_CASE_SENSITIVE) == 0)
+    if (posix::caseInsensitive(path.parent_path()))
         for (auto& c : key) c = std::towlower(c);
-#endif
     return key;
 }
 
-fs::path appDirectory() {
-#ifdef __APPLE__
-    uint32_t length = 0;
-    _NSGetExecutablePath(nullptr, &length);
-    std::string path(length, '\0');
-    if (_NSGetExecutablePath(path.data(), &length) != 0)
-        throw std::runtime_error("Cannot resolve the executable path.");
-    return fs::canonical(fs::path(path.c_str())).parent_path();
-#else
-    return fs::read_symlink("/proc/self/exe").parent_path();
-#endif
+namespace posix {
+fs::path homeDirectory() {
+    if (const auto* home = std::getenv("HOME"); home && fs::path(home).is_absolute()) return home;
+    throw std::runtime_error("The home directory is unavailable.");
 }
 
-fs::path findExecutable(const char* name) {
-#ifdef __APPLE__
-    const auto bundled = appDirectory().parent_path() / "Resources" / "tools" / "bin" / name;
-    if (executable(bundled)) return bundled;
-#if defined(__arm64__) || defined(__aarch64__)
-    const fs::path brew = "/opt/homebrew";
-#else
-    const fs::path brew = "/usr/local";
-#endif
-    if (std::string_view(name) == "ffmpeg" || std::string_view(name) == "ffprobe") {
-        const auto full = brew / "opt/ffmpeg-full/bin" / name;
-        if (executable(full)) return full;
-    }
-#endif
+bool executable(const fs::path& path) {
+    std::error_code error;
+    return fs::is_regular_file(path, error) && access(path.c_str(), X_OK) == 0;
+}
+
+fs::path findOnPath(const char* name) {
     if (const auto* value = std::getenv("PATH")) {
         std::istringstream directories(value);
         std::string directory;
@@ -162,15 +122,8 @@ fs::path findExecutable(const char* name) {
             if (candidate.is_absolute() && executable(candidate)) return candidate;
         }
     }
-#ifdef __APPLE__
-    const auto installed = brew / "bin" / name;
-    if (executable(installed)) return installed;
-    const auto local = fs::path("/usr/local/bin") / name;
-    if (executable(local)) return local;
-    const fs::path libreOffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice";
-    if (std::string_view(name) == "soffice" && executable(libreOffice)) return libreOffice;
-#endif
     return {};
+}
 }
 
 fs::path engine(const char* name) {
@@ -179,39 +132,11 @@ fs::path engine(const char* name) {
     return path;
 }
 
+fs::path archiveExecutable() { return appDirectory() / "ContextActionsArchive"; }
+
 fs::path dataDirectory() {
     if (const auto* value = std::getenv("CONTEXT_ACTIONS_DATA_DIR"); value && *value) return value;
-#ifdef __APPLE__
-    return homeDirectory() / "Library/Application Support/Context Actions";
-#else
-    if (const auto* value = std::getenv("XDG_DATA_HOME"); value && fs::path(value).is_absolute())
-        return fs::path(value) / "context-actions";
-    return homeDirectory() / ".local/share/context-actions";
-#endif
-}
-
-fs::path conversionScratchRoot() {
-#ifdef __APPLE__
-    // Darwin assigns this directory to the current user outside shared output trees.
-    const auto length = confstr(_CS_DARWIN_USER_TEMP_DIR, nullptr, 0);
-    if (!length) throw std::runtime_error("The user temporary directory is unavailable.");
-    std::string path(length, '\0');
-    if (confstr(_CS_DARWIN_USER_TEMP_DIR, path.data(), path.size()) != length)
-        throw std::runtime_error("The user temporary directory is unavailable.");
-    path.pop_back();
-    return fs::canonical(path);
-#else
-    const auto home = fs::canonical(homeDirectory());
-    for (auto path = home; ; path = path.parent_path()) {
-        struct stat info{};
-        require(stat(path.c_str(), &info) == -1 ? errno : 0, "Inspect scratch directory ancestry");
-        if (!S_ISDIR(info.st_mode) || (info.st_uid != 0 && info.st_uid != geteuid()) ||
-            ((info.st_mode & 0022) && !(info.st_mode & S_ISVTX)))
-            throw std::runtime_error("The user scratch directory is in an untrusted location.");
-        if (path == path.root_path()) break;
-    }
-    return home;
-#endif
+    return posix::defaultDataDirectory();
 }
 
 void createPrivateDirectory(const fs::path& path) {
@@ -260,22 +185,7 @@ std::wstring readLanguageSetting() {
         std::ifstream settings(path);
         if (std::getline(settings, value) && !value.empty()) return wide(value);
     }
-#ifdef __APPLE__
-    const auto preferred = CFLocaleCopyPreferredLanguages();
-    char language[128]{};
-    if (preferred) {
-        if (CFArrayGetCount(preferred) > 0)
-            CFStringGetCString(static_cast<CFStringRef>(CFArrayGetValueAtIndex(preferred, 0)),
-                               language, sizeof(language), kCFStringEncodingUTF8);
-        CFRelease(preferred);
-    }
-    if (*language) return wide(language);
-#else
-    for (const auto* key : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
-        if (const auto* language = std::getenv(key); language && *language) return wide(language);
-    }
-#endif
-    return L"en";
+    return posix::preferredLanguage();
 }
 
 void writeLanguageSetting(const std::wstring& value) {
@@ -294,18 +204,8 @@ void moveFile(const fs::path& from, const fs::path& to, bool replace) {
         fs::rename(from, to);
         return;
     }
-#ifdef __APPLE__
-    if (renamex_np(from.c_str(), to.c_str(), RENAME_EXCL) == 0) return;
-    const int error = errno;
-    // On a case-insensitive volume the two spellings can refer to the same directory entry.
-    if (error == EEXIST && pathKey(from) == pathKey(to) && fs::equivalent(from, to)) {
-        fs::rename(from, to);
-        return;
-    }
-#else
-    if (syscall(SYS_renameat2, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(), RENAME_NOREPLACE) == 0) return;
-    const int error = errno;
-#endif
+    const int error = posix::moveFileExclusive(from, to);
+    if (!error) return;
     if (error == ENOSYS || error == EINVAL || error == EOPNOTSUPP) {
         // Some mounted filesystems cannot do an exclusive rename. Link creation still fails
         // atomically if the destination already exists.
@@ -360,7 +260,7 @@ void withRenameLock(const fs::path& file, const std::function<void()>& operation
 
 ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstring>& arguments,
                          std::atomic_bool& cancel, const std::function<void(const std::string&)>& onOutput,
-                         uint32_t timeoutMs, [[maybe_unused]] size_t processMemoryLimit) {
+                         uint32_t timeoutMs, size_t processMemoryLimit) {
     if (cancel) throw Cancelled();
     std::vector<std::string> command{executable.native()};
     for (const auto& argument : arguments) command.push_back(utf8(argument));
@@ -385,12 +285,8 @@ ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstr
 
     ChildProcess child;
     pid_t pid;
-#ifdef __APPLE__
-    char** environment = *_NSGetEnviron();
-#else
-    char** environment = environ;
-#endif
-    require(posix_spawn(&pid, executable.c_str(), &actions.value, &attributes.value, argv.data(), environment), "Start process");
+    require(posix_spawn(&pid, executable.c_str(), &actions.value, &attributes.value, argv.data(),
+                        posix::processEnvironment()), "Start process");
     child.id = pid;
     writer.close();
 
@@ -419,18 +315,7 @@ ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstr
         if (cancel) throw Cancelled();
         if (timeoutMs != UINT32_MAX && steady_clock::now() >= deadline)
             throw std::runtime_error("Operation timed out.");
-#ifdef __APPLE__
-        if (processMemoryLimit) {
-            // Older supported macOS versions do not enforce an address-space rlimit.
-            rusage_info_v0 usage{};
-            if (proc_pid_rusage(child.id, RUSAGE_INFO_V0, reinterpret_cast<rusage_info_t*>(&usage)) == 0) {
-                if (usage.ri_phys_footprint > processMemoryLimit)
-                    throw std::runtime_error("Operation exceeded its memory budget.");
-            } else if (errno != ESRCH && errno != EINTR) {
-                require(errno, "Measure process memory");
-            }
-        }
-#endif
+        posix::checkMemoryLimit(child.id, processMemoryLimit);
         drain();
         const auto exited = waitpid(child.id, &status, WNOHANG);
         if (exited == child.id) {

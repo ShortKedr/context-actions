@@ -10,6 +10,7 @@ struct CloseFile {
 using File = std::unique_ptr<std::FILE, CloseFile>;
 
 fs::path engine(const char* name);
+fs::path archiveExecutable();
 fs::path conversionScratchRoot();
 void createPrivateDirectory(const fs::path& path);
 void ensurePrivateDirectory(const fs::path& path);

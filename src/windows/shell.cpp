@@ -1,11 +1,11 @@
-#include "windows/platform_win.h"
+#include "platform_win.h"
 #include <shobjidl.h>
 #include <shlwapi.h>
 #include <wrl/implements.h>
 
 using namespace Microsoft::WRL;
 namespace {
-// Keep synchronized with packaging/AppxManifest.xml and register-shell.ps1.
+// Keep synchronized with packaging/windows/AppxManifest.xml and register-shell.ps1.
 const CLSID commandClsid={0xa836fb4f,0x6548,0x4fc3,{0x8d,0x67,0x50,0x26,0x7b,0x25,0xa4,0x18}};
 HMODULE module=nullptr;std::atomic_long objects=0;
 ca::fs::path directory(){wchar_t path[32768];GetModuleFileNameW(module,path,32768);return ca::fs::path(path).parent_path();}
@@ -57,7 +57,9 @@ public:
             ca::Options options;options.action=action;options.files=selection(items);if(options.files.empty())return E_INVALIDARG;
             if(!ca::accepts(action,options.files)||
                 (action==ca::Action::repack&&!ca::unavailableReason(action,options.files).empty()))return E_INVALIDARG;
-            auto job=ca::writeJob(options);std::vector<std::wstring> args{L"--job",job.wstring()};
+            auto job=ca::writeJob(options);
+            std::vector<std::wstring> args{L"--job",job.wstring()};
+            if(action==ca::Action::more)args.push_back(L"--choose-action");
             try{ca::launch(directory()/L"ContextActions.exe",args);}catch(...){ca::consumeJob(job);throw;}
             return S_OK;
         }catch(...){return E_FAIL;}

@@ -5,7 +5,7 @@
  #error OutputDir is required
 #endif
 #ifndef AppVersion
- #define AppVersion "0.1.0"
+ #define AppVersion "0.2.0"
 #endif
 #define AppGuid "A836FB4F-6548-4FC3-8D67-50267B25A418"
 [Setup]
@@ -23,13 +23,13 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=ContextActions-{#AppVersion}-win-x64-setup
-SetupIconFile=..\resources\app.ico
+SetupIconFile=..\..\src\windows\resources\app.ico
 UninstallDisplayIcon={app}\ContextActions.exe
 WizardStyle=modern
 DisableProgramGroupPage=yes
 CloseApplications=no
 RestartApplications=no
-LicenseFile=..\docs\preview-license.txt
+LicenseFile=..\..\docs\preview-license.txt
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

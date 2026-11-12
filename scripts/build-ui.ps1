@@ -16,7 +16,7 @@ if (-not $vs) {
 $cache = Join-Path $root '.build-tools'
 $downloads = Join-Path $cache 'downloads'
 $packages = Join-Path $cache 'nuget'
-$config = Join-Path $root 'src\ui\packages.config'
+$config = Join-Path $root 'src\windows\ui\packages.config'
 # SHA-256 of the signed archives for the versions in packages.config.
 $packageHashes = @{
     'Microsoft.Web.WebView2.1.0.3719.77' = '2F6BE3A10A1A8D6D1FDE986AF4131DAB344F8181FFFE75590824E0F4B037ED73'
@@ -97,7 +97,7 @@ try {
     # C++/WinRT invokes mdmerge by name in cmd.exe, whose PATH is limited to 8191 characters.
     $env:PATH = "$($sdkTools[0]);$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
     $env:NoDefaultCurrentDirectoryInExePath = '1'
-    & (Join-Path $vs 'MSBuild\Current\Bin\MSBuild.exe') 'src\ui\ContextActions.vcxproj' /p:Configuration=Release /p:Platform=x64 /m:2 /v:quiet /nologo /nodeReuse:false '/flp:logfile=build/winui-build.log;verbosity=normal'
+    & (Join-Path $vs 'MSBuild\Current\Bin\MSBuild.exe') 'src\windows\ui\ContextActions.vcxproj' /p:Configuration=Release /p:Platform=x64 /m:2 /v:quiet /nologo /nodeReuse:false '/flp:logfile=build/winui-build.log;verbosity=normal'
     if ($LASTEXITCODE -ne 0) { throw 'WinUI build failed. See build\winui-build.log.' }
     Copy-Item -LiteralPath 'build\Release\ContextActionsArchive.exe' -Destination 'build\winui'
 } finally {

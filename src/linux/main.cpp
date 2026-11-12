@@ -92,7 +92,7 @@ class Workspace {
 public:
     explicit Workspace(ca::CommandLine command)
         : files_(std::move(command.options.files)), initial_(std::move(command.options)),
-          immediate_(command.immediate), actions_(ca::catalog()) {}
+          immediate_(command.immediate), chooseAction_(command.chooseAction), actions_(ca::catalog()) {}
 
     ~Workspace() {
         cancelled_ = true;
@@ -102,6 +102,11 @@ public:
     }
 
     void activate(GtkApplication* application) {
+        if (chooseAction_) {
+            if (!actionWindow_) buildActionWindow(application);
+            gtk_window_present(actionWindow_);
+            return;
+        }
         if (!window_) build(application);
         gtk_window_present(window_);
         if (std::exchange(immediate_, false)) start();
@@ -113,6 +118,89 @@ public:
     }
 
 private:
+    void buildActionWindow(GtkApplication* application) {
+        const auto choices = ca::actionChoices(files_);
+        actionWindow_ = GTK_WINDOW(gtk_application_window_new(application));
+        gtk_window_set_title(actionWindow_, label("chooseAction").c_str());
+        gtk_window_set_icon_name(actionWindow_, applicationId);
+        gtk_window_set_titlebar(actionWindow_, gtk_header_bar_new());
+        gtk_window_set_default_size(actionWindow_, 460, -1);
+
+        auto* root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+        margins(root, 16);
+        gtk_window_set_child(actionWindow_, root);
+        auto* grid = gtk_grid_new();
+        gtk_grid_set_column_homogeneous(GTK_GRID(grid), true);
+        gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+        gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+        auto* scroll = scroller(grid);
+        gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroll), true);
+        gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(scroll), 320);
+        gtk_box_append(GTK_BOX(root), scroll);
+        if (choices.empty()) {
+            auto* message = leftLabel(label("noApplicableActions"));
+            gtk_label_set_wrap(GTK_LABEL(message), true);
+            gtk_grid_attach(GTK_GRID(grid), message, 0, 0, 2, 1);
+        }
+
+        GtkWidget* firstAvailable = nullptr;
+        for (size_t index = 0; index < choices.size(); ++index) {
+            const auto& choice = choices[index];
+            auto* item = gtk_button_new();
+            auto* caption = gtk_label_new(ca::utf8(choice.label).c_str());
+            gtk_label_set_wrap(GTK_LABEL(caption), true);
+            gtk_label_set_justify(GTK_LABEL(caption), GTK_JUSTIFY_CENTER);
+            gtk_button_set_child(GTK_BUTTON(item), caption);
+            gtk_widget_set_hexpand(item, true);
+            if (!choice.unavailable.empty()) {
+                gtk_widget_set_sensitive(item, false);
+                gtk_widget_set_tooltip_text(item, ca::utf8(choice.unavailable).c_str());
+            } else if (!firstAvailable) {
+                firstAvailable = item;
+            }
+            gtk_grid_attach(GTK_GRID(grid), item, static_cast<int>(index % 2),
+                static_cast<int>(index / 2), 1, 1);
+            g_object_set_data(G_OBJECT(item), "context-actions-action",
+                GUINT_TO_POINTER(static_cast<unsigned>(choice.action)));
+            g_signal_connect(item, "clicked", G_CALLBACK(+[](GtkButton* item, gpointer data) {
+                auto& self = *static_cast<Workspace*>(data);
+                const auto action = static_cast<Action>(GPOINTER_TO_UINT(
+                    g_object_get_data(G_OBJECT(item), "context-actions-action")));
+                try { self.chooseAction(action); }
+                catch (const std::exception& error) { self.reportError(error); }
+            }), this);
+        }
+
+        auto* cancel = gtk_button_new_with_label(label("cancel").c_str());
+        gtk_widget_set_halign(cancel, GTK_ALIGN_END);
+        gtk_box_append(GTK_BOX(root), cancel);
+        g_signal_connect_swapped(cancel, "clicked", G_CALLBACK(gtk_window_close), actionWindow_);
+        gtk_window_set_focus(actionWindow_, firstAvailable ? firstAvailable : cancel);
+        gtk_window_set_focus_visible(actionWindow_, true);
+
+        auto* keys = gtk_event_controller_key_new();
+        gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
+        g_signal_connect(keys, "key-pressed", G_CALLBACK(+[](GtkEventControllerKey*, guint key,
+                guint, GdkModifierType, gpointer data) -> gboolean {
+            if (key != GDK_KEY_Escape) return false;
+            gtk_window_close(GTK_WINDOW(data));
+            return true;
+        }), actionWindow_);
+        gtk_widget_add_controller(GTK_WIDGET(actionWindow_), keys);
+        g_signal_connect(actionWindow_, "close-request", G_CALLBACK(+[](GtkWindow*, gpointer data) -> gboolean {
+            static_cast<Workspace*>(data)->actionWindow_ = nullptr;
+            return false;
+        }), this);
+    }
+
+    void chooseAction(Action action) {
+        auto* application = gtk_window_get_application(actionWindow_);
+        initial_.action = action;
+        chooseAction_ = false;
+        activate(application);
+        gtk_window_destroy(std::exchange(actionWindow_, nullptr));
+    }
+
     template<void (Workspace::*handler)()>
     GtkWidget* button(GtkWidget* box, const char* key) {
         auto* widget = gtk_button_new_with_label(label(key).c_str());
@@ -709,12 +797,13 @@ private:
     std::vector<ca::fs::path> files_;
     ca::Options initial_;
     ca::fs::path chosenOutput_;
-    bool immediate_;
+    bool immediate_, chooseAction_;
     std::vector<Action> actions_;
     Action formatAction_ = Action::more;
     std::vector<std::wstring> formats_;
     std::map<Action, std::wstring> formatSelections_;
     GtkWindow* window_ = nullptr;
+    GtkWindow* actionWindow_ = nullptr;
     GtkFileChooserNative* chooser_ = nullptr;
     GtkWidget *fileList_ = nullptr, *add_ = nullptr, *remove_ = nullptr, *up_ = nullptr, *down_ = nullptr;
     GtkWidget *controls_ = nullptr, *action_ = nullptr, *availability_ = nullptr, *media_ = nullptr;

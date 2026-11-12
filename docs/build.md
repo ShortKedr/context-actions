@@ -2,6 +2,8 @@
 
 Общее ядро и CLI собираются на каждой платформе. Windows использует WinUI 3 и расширение File Explorer, macOS использует AppKit и Finder, Linux использует GTK 4 и freedesktop desktop entry.
 
+Ядро определяет порядок, доступность и локализованные названия действий для всего набора файлов. Интерфейсы и интеграция с файловыми менеджерами находятся в `src/windows`, `src/macos` и `src/linux`. В Linux расширение Nautilus находится в `src/linux/gnome`, а сервисное меню Dolphin — в `src/linux/kde`. В `src/posix` находятся общие для macOS и Linux функции POSIX. Выбор действия можно открыть из командной строки через `--choose-action -- <файлы>`.
+
 Установщики сравнивают номера версий. Более новая версия заменяет установленную. Для переустановки той же версии или отката нужно явно отметить флажок в интерфейсе установщика. Архивы для ручной распаковки и старые установщики, выпущенные до добавления проверки, работают по своим прежним правилам.
 
 ## Windows 11 x64
@@ -26,7 +28,7 @@
 .\scripts\build-ui.ps1 -Offline
 ```
 
-Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/` по URL из `dependencies.json` и проверяются по SHA-256 перед распаковкой. WinUI-пакеты с nuget.org зафиксированы по версиям в `src/ui/packages.config` и по SHA-256 в `scripts/build-ui.ps1`. Каждая сборка заново распаковывает проверенные пакеты в `.build-tools/nuget/`. Inno Setup используется как переносимый пакет `Tools.InnoSetup`.
+Один сценарий используется локально и в `.github/workflows/build-windows.yml`. Архивы движков и Inno Setup загружаются в `.build-tools/downloads/` по URL из `dependencies.json` и проверяются по SHA-256 перед распаковкой. WinUI-пакеты с nuget.org зафиксированы по версиям в `src/windows/ui/packages.config` и по SHA-256 в `scripts/build-ui.ps1`. Каждая сборка заново распаковывает проверенные пакеты в `.build-tools/nuget/`. Inno Setup используется как переносимый пакет `Tools.InnoSetup`.
 
 При первой конфигурации CMake скачивает исходники libarchive, zlib и liblzma и проверяет их по SHA-256 из `cmake/ArchiveEngine.cmake`. Для сборки Windows с `-Offline` сохраните эти три архива в `build/archive-upstream/`. Собранный движок входит в дистрибутив и доступен при работе приложения без сети.
 
@@ -34,12 +36,10 @@
 
 Для отдельной проверки интерфейса запустите `./scripts/ui-smoke-test.ps1 -AppPath ./dist/ContextActions/ContextActions.exe` в интерактивном сеансе Windows. Скрипт открывает приложение и проверяет выбор файлов, переименование и отмену, переходы между режимами окна, валидацию и диагностику ошибок.
 
-Исходники старого UI в `src/ui.cpp` временно сохранены для сравнения до проверки паритета; они больше не компилируются и не входят в поставку.
-
 Выходы:
 
 - `dist/ContextActions/ContextActions.exe` — приложение, можно запустить до установки.
-- `dist/ContextActions-0.1.0-win-x64-setup.exe` и `.sha256` — полный установщик preview.
+- `dist/ContextActions-<версия>-win-x64-setup.exe` и `.sha256` — полный установщик preview.
 - `dist/reports/core-tests.xml`, `application-smoke.txt` — программные проверки.
 - `dist/reports/test-status.json` — выполненные и пропущенные проверки текущей сборки; отсутствие запуска не считается успехом.
 - `dist/reports/size.json` — фактический размер EXE установщика и отдельно распакованный payload; размер сгенерированного Inno uninstaller и системного кэша MSIX в payload не включён.
@@ -99,6 +99,10 @@ bash packaging/macos/package.sh build/macos dist/macos
 
 Для переустановки или отката откройте PKG в Installer и отметьте **Allow reinstall or downgrade** на экране выбора компонентов.
 
+В Finder выберите локальные файлы и откройте **Services → Context Actions…** в контекстном меню. В окне выбора нажмите нужное действие, проверьте его параметры и нажмите **Run**. Службу можно включить в настройках macOS **Keyboard → Keyboard Shortcuts → Services**.
+
+Для проверки службы закройте приложение, выберите в Finder два локальных видео, одно из которых содержит пробелы в имени, и вызовите **Context Actions…**. Выберите **Compress video** и убедитесь, что оба файла появились в окне параметров, а обработка ждёт **Run**. Вызовите службу повторно при открытом окне и нажмите **Esc** в окне выбора. Открытый список файлов должен сохраниться.
+
 ## Linux
 
 Интерфейс Linux использует GTK 4.6+. Установите FFmpeg с энкодерами `libx264`, `libx265` и `libwebp` и qpdf из репозитория своего дистрибутива. Для экспорта Office в PDF также нужны LibreOffice Writer и Calc. Настройки хранятся в `$XDG_DATA_HOME/context-actions` или `~/.local/share/context-actions`. [Зависимости GTK по дистрибутивам](https://www.gtk.org/docs/installations/linux).
@@ -107,7 +111,7 @@ bash packaging/macos/package.sh build/macos dist/macos
 - **Fedora и другие RPM-дистрибутивы** — установка через менеджер пакетов, например `sudo dnf install ./<имя-пакета>.rpm`. Для Fedora может понадобиться RPM Fusion Free с полным FFmpeg.
 - **Arch Linux x86-64** — `sudo pacman -U ./context-actions-<версия>-1-x86_64.pkg.tar.zst`. Для сборки из исходников установите зависимости из `packaging/linux/arch/PKGBUILD` и запустите `makepkg` в этом каталоге от обычного пользователя. [Документация Arch о сборке пакетов](https://wiki.archlinux.org/title/Creating_packages).
 
-После установки выберите один или несколько локальных файлов в GNOME Files (Nautilus) или KDE Dolphin и нажмите **Context Actions** в контекстном меню. Для этого меню в Dolphin требуется KDE Frameworks 5.85 или новее. Пакеты DEB, RPM и Arch устанавливают загрузчик расширений Nautilus как зависимость. Если GNOME Files уже запущен, перезапустите его командой `nautilus -q` и снова откройте файловый менеджер. [Документация GNOME](https://gnome.pages.gitlab.gnome.org/nautilus-python/nautilus-python-overview.html), [документация KDE](https://develop.kde.org/docs/apps/dolphin/service-menus/).
+После установки выберите один или несколько локальных файлов в GNOME Files (Nautilus) или KDE Dolphin и нажмите **Context Actions** в контекстном меню. В окне выбора нажмите нужное действие, проверьте его параметры и нажмите **Run**. Для этого меню в Dolphin требуется KDE Frameworks 5.85 или новее. Пакеты DEB, RPM и Arch устанавливают загрузчик расширений Nautilus как зависимость. Если GNOME Files уже запущен, перезапустите его командой `nautilus -q` и снова откройте файловый менеджер. [Документация GNOME](https://gnome.pages.gitlab.gnome.org/nautilus-python/nautilus-python-overview.html), [документация KDE](https://develop.kde.org/docs/apps/dolphin/service-menus/).
 
 ### Переносимый архив
 
@@ -136,11 +140,11 @@ cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
 
 ## Выпуск версии
 
-Обновите номер версии в `CMakeLists.txt` и `dependencies.json`. После публикации коммита в `main` отправьте соответствующий тег, например `v0.1.0`.
+Согласуйте номер версии в `CMakeLists.txt`, `dependencies.json`, ресурсах и манифестах Windows, настройках Inno Setup и `web/release.json`. После публикации коммита в `main` отправьте соответствующий тег, например `v0.2.0`.
 
 ```bash
-git tag -a v0.1.0 -m "Context Actions v0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "Context Actions v0.2.0"
+git push origin v0.2.0
 ```
 
 Workflow **Release** проверяет тег и запускает сборки Windows, macOS и Linux для этого коммита. После успешных проверок он сверяет контрольные суммы, прикрепляет приложения и установщики к черновику GitHub Release и публикует его. Раздел **Changes** формируется из коммитов после предыдущего опубликованного тега, а первый выпуск включает историю до своего тега. После сбоя можно повторно запустить workflow для того же тега, если исходный коммит менять не нужно.

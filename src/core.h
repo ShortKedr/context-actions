@@ -33,6 +33,7 @@ struct CommandLine {
     Options options;
     fs::path report;
     bool headless = false, immediate = false, help = false;
+    bool chooseAction = false;
 };
 void parseArguments(const std::vector<std::wstring>& arguments, CommandLine& command);
 std::optional<int> runCommandLine(const CommandLine& command);
@@ -53,6 +54,12 @@ Action parseAction(const std::wstring& value);
 const char* actionKey(Action action);
 std::wstring trAction(Action action);
 std::vector<Action> catalog();
+struct ActionChoice {
+    Action action;
+    std::wstring label;
+    std::wstring unavailable;
+};
+std::vector<ActionChoice> actionChoices(const std::vector<fs::path>& files);
 std::vector<std::wstring> outputFormats(Action action);
 std::vector<std::wstring> outputFormats(Action action, const std::vector<fs::path>& files);
 std::wstring outputFormat(const Options& options);

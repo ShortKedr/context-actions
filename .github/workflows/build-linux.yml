@@ -125,7 +125,8 @@ jobs:
           test -f "$icon"
           test -r "$nautilus_menu"
           test -x "$dolphin_menu"
-          test "$(grep '^Exec=' "$dolphin_menu")" = "$(grep '^Exec=' "$launcher")"
+          launcher_exec=$(grep '^Exec=' "$launcher")
+          test "$(grep '^Exec=' "$dolphin_menu")" = "${launcher_exec% -- %F} --choose-action -- %F"
           if bash "$installer" install; then
             echo 'The per-user installer allowed replacing the same version without confirmation.' >&2
             exit 1

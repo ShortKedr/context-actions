@@ -1,10 +1,8 @@
-#include "platform.h"
+#include "posix_platform.h"
 
 #include <fstream>
 
 namespace ca {
-fs::path findExecutable(const char* name);
-
 namespace {
 std::atomic<Capability> capabilities[2]{Capability::unknown, Capability::unknown};
 

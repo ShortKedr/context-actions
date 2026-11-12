@@ -5,7 +5,7 @@
     <RootNamespace>ContextActions</RootNamespace>
     <ProjectName>ContextActions</ProjectName>
     <TargetName>ContextActions</TargetName>
-    <Packages>$(MSBuildThisFileDirectory)..\..\.build-tools\nuget</Packages>
+    <Packages>$(MSBuildThisFileDirectory)..\..\..\.build-tools\nuget</Packages>
     <CppWinRTOptimized>true</CppWinRTOptimized>
     <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
     <MinimalCoreWin>true</MinimalCoreWin>
@@ -43,9 +43,9 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <OutDir>$(MSBuildThisFileDirectory)..\..\build\winui\</OutDir>
-    <IntDir>$(MSBuildThisFileDirectory)..\..\build\winui-obj\</IntDir>
-    <RepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</RepositoryRoot>
+    <OutDir>$(MSBuildThisFileDirectory)..\..\..\build\winui\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\..\..\build\winui-obj\</IntDir>
+    <RepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))</RepositoryRoot>
     <GeneratedFilesDir>$(IntDir)Generated Files\</GeneratedFilesDir>
     <AppxPriInitialPath></AppxPriInitialPath>
   </PropertyGroup>
@@ -58,11 +58,11 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalOptions>/utf-8 /bigobj /d1trimfile:"$(RepositoryRoot)" %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>NDEBUG;UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;DISABLE_XAML_GENERATED_MAIN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(RepositoryRoot)\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>$(MSBuildThisFileDirectory)..\..\build\Release\actions_core.lib;advapi32.lib;ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;uuid.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(RepositoryRoot)\build\Release\actions_core.lib;advapi32.lib;ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;uuid.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>libucrt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <AdditionalOptions>/defaultlib:ucrt.lib /PDBALTPATH:ContextActions.pdb %(AdditionalOptions)</AdditionalOptions>
     </Link>
@@ -79,8 +79,8 @@
     <Midl Include="MainWindow.idl" />
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
-    <Manifest Include="..\..\resources\app.manifest" />
-    <ResourceCompile Include="..\..\resources\app.rc" />
+    <Manifest Include="..\resources\app.manifest" />
+    <ResourceCompile Include="..\resources\app.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="$(Packages)\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets" />

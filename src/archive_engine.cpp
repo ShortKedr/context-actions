@@ -1,27 +1,19 @@
-#include <archive.h>
+#include "archive_platform.h"
 #include <archive_entry.h>
-#include <zlib.h>
 
 #include <array>
 #include <cerrno>
-#include <clocale>
 #include <cstdio>
-#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#ifndef _WIN32
-#include <sys/resource.h>
-#endif
 
+namespace ca::archiveTool {
 namespace {
-namespace fs = std::filesystem;
-constexpr std::uint64_t gibibyte = 1024ULL * 1024 * 1024;
 constexpr std::uint64_t maxExpandedBytes = 8 * gibibyte;
-constexpr std::uint64_t maxContainerBytes = 9 * gibibyte;
 constexpr std::size_t maxEntries = 100000;
 using Reader = std::unique_ptr<archive, decltype(&archive_read_free)>;
 using Entry = std::unique_ptr<archive_entry, decltype(&archive_entry_free)>;
@@ -29,16 +21,6 @@ struct CloseFile {
     void operator()(std::FILE* file) const { std::fclose(file); }
 };
 using File = std::unique_ptr<std::FILE, CloseFile>;
-
-#ifndef _WIN32
-void lowerResourceLimit(int resource, rlim_t limit) {
-    rlimit limits{};
-    if (getrlimit(resource, &limits) != 0) throw std::runtime_error("Cannot read archive process resource limit");
-    if (limits.rlim_cur != RLIM_INFINITY && limits.rlim_cur <= limit) return;
-    limits.rlim_cur = limit;
-    if (setrlimit(resource, &limits) != 0) throw std::runtime_error("Cannot set archive process resource limit");
-}
-#endif
 
 void check(int status, archive* handle) {
     if (status == ARCHIVE_OK) return;
@@ -51,12 +33,7 @@ struct GzipInput {
     std::array<char, 64 * 1024> buffer{};
     std::uint64_t remaining = maxContainerBytes;
 
-    explicit GzipInput(const fs::path& path)
-#ifdef _WIN32
-        : file(gzopen_w(path.c_str(), "rb")) {
-#else
-        : file(gzopen(path.c_str(), "rb")) {
-#endif
+    explicit GzipInput(const fs::path& path) : file(openGzip(path)) {
         if (!file) throw std::runtime_error("Cannot open gzip input");
     }
     ~GzipInput() { gzclose_r(file); }
@@ -85,13 +62,7 @@ struct ArchiveOutput {
     File file;
     std::uint64_t remaining = maxContainerBytes;
 
-    explicit ArchiveOutput(const fs::path& path) {
-#ifdef _WIN32
-        std::FILE* opened = nullptr;
-        if (_wfopen_s(&opened, path.c_str(), L"wb") == 0) file.reset(opened);
-#else
-        file.reset(std::fopen(path.c_str(), "wb"));
-#endif
+    explicit ArchiveOutput(const fs::path& path) : file(openFile(path, true)) {
         if (!file) throw std::runtime_error("Cannot open output archive");
     }
 
@@ -231,6 +202,8 @@ void copyEntry(archive* reader, archive* writer, archive_entry* source, std::uin
     check(archive_write_finish_entry(writer), writer);
 }
 
+}
+
 void repack(const fs::path& from, const fs::path& to, const fs::path& source, const fs::path& destination) {
     std::unique_ptr<GzipInput> gzip;
     File rar;
@@ -260,21 +233,12 @@ void repack(const fs::path& from, const fs::path& to, const fs::path& source, co
         if (gzdirect(gzip->file)) throw std::runtime_error("Input is not gzip compressed");
         check(archive_read_open(reader.get(), gzip.get(), nullptr, GzipInput::read, nullptr), reader.get());
     } else if (from == "rar") {
-#ifdef _WIN32
-        std::FILE* input = nullptr;
-        if (_wfopen_s(&input, source.c_str(), L"rb") == 0) rar.reset(input);
-#else
-        rar.reset(std::fopen(source.c_str(), "rb"));
-#endif
+        rar.reset(openFile(source, false));
         if (!rar) throw std::runtime_error("Cannot open RAR input");
         checkRarVolume(rar.get());
         check(archive_read_open_FILE(reader.get(), rar.get()), reader.get());
     } else {
-#ifdef _WIN32
-        check(archive_read_open_filename_w(reader.get(), source.c_str(), 64 * 1024), reader.get());
-#else
-        check(archive_read_open_filename(reader.get(), source.c_str(), 64 * 1024), reader.get());
-#endif
+        check(openReader(reader.get(), source), reader.get());
     }
 
     if (to == "zip") {
@@ -309,30 +273,4 @@ void repack(const fs::path& from, const fs::path& to, const fs::path& source, co
     check(archive_write_close(writer.get()), writer.get());
     if (std::fclose(output->file.release()) != 0) throw std::runtime_error("Cannot close output archive");
 }
-}
-
-#ifdef _WIN32
-int wmain(int argc, wchar_t** argv) {
-    std::setlocale(LC_CTYPE, ".UTF-8");
-#else
-int main(int argc, char** argv) {
-    std::setlocale(LC_CTYPE, "");
-    if (MB_CUR_MAX == 1 && !std::setlocale(LC_CTYPE, "C.UTF-8")) std::setlocale(LC_CTYPE, "UTF-8");
-#endif
-    if (argc != 5) return 2;
-    try {
-#ifndef _WIN32
-        // Also bound temporary files written directly by the 7z encoder.
-        lowerResourceLimit(RLIMIT_FSIZE, maxContainerBytes);
-#endif
-#ifdef __linux__
-        // The archive reader may allocate decoder state before returning any entries.
-        lowerResourceLimit(RLIMIT_AS, gibibyte);
-#endif
-        repack(argv[1], argv[2], argv[3], argv[4]);
-        return 0;
-    } catch (const std::exception& error) {
-        std::fprintf(stderr, "%s\n", error.what());
-        return 1;
-    }
 }

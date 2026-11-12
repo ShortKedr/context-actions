@@ -24,7 +24,7 @@ $images = foreach ($size in $sizes) {
     ,$stream.ToArray()
     $stream.Dispose(); $bitmap.Dispose()
 }
-$file = [IO.File]::Create((Join-Path $destination 'app.ico'))
+$file = [IO.File]::Create((Join-Path $PSScriptRoot '..\src\windows\resources\app.ico'))
 $writer = [IO.BinaryWriter]::new($file)
 $writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]$sizes.Count)
 $offset = 6 + 16 * $sizes.Count

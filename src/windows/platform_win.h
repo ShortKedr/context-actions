@@ -18,5 +18,5 @@ void check(HRESULT hr);
 std::wstring systemError(DWORD code);
 std::wstring quote(const std::wstring& argument);
 void launch(const fs::path& executable, const std::vector<std::wstring>& arguments);
-int runUi(Options options, bool immediate);
+int runUi(Options options, bool immediate, bool chooseAction);
 }

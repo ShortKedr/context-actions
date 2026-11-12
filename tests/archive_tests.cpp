@@ -441,9 +441,17 @@ void runTests(const fs::path& root, const fs::path& fixtures) {
     fs::path watchedScratch;
     cancel = false;
     const auto inFlight = [&] {
-        std::jthread watch([&](std::stop_token stop) {
+        struct Watcher {
+            std::atomic_bool done = false;
+            std::thread thread;
+            ~Watcher() {
+                done = true;
+                if (thread.joinable()) thread.join();
+            }
+        } watch;
+        watch.thread = std::thread([&] {
             // Only the helper creates this file, so cancellation happens after it starts.
-            while (!stop.stop_requested()) {
+            while (!watch.done) {
                 std::error_code error;
                 for (fs::directory_iterator it(scratchRoot, error), end; !error && it != end; it.increment(error)) {
                     const auto& path = it->path();

@@ -1,16 +1,17 @@
 {
-  "tag": "v0.1.0",
+  "tag": "v0.2.0",
   "assets": [
-    "ContextActions-0.1.0-win-x64-setup.exe",
+    "ContextActions-0.2.0-win-x64-setup.exe",
     "ContextActions-win-x64.zip",
-    "ContextActions-0.1.0-macos-universal.pkg",
-    "ContextActions-0.1.0-macos-universal.zip",
-    "context-actions_0.1.0_amd64.deb",
-    "context-actions_0.1.0_arm64.deb",
-    "context-actions-0.1.0-1.x86_64.rpm",
-    "context-actions-0.1.0-1.aarch64.rpm",
-    "context-actions-0.1.0-linux-x86_64.tar.gz",
-    "context-actions-0.1.0-linux-aarch64.tar.gz",
+    "ContextActions-0.2.0-macos-universal.pkg",
+    "ContextActions-0.2.0-macos-universal.zip",
+    "context-actions_0.2.0_amd64.deb",
+    "context-actions_0.2.0_arm64.deb",
+    "context-actions-0.2.0-1.x86_64.rpm",
+    "context-actions-0.2.0-1.aarch64.rpm",
+    "context-actions-0.2.0-linux-x86_64.tar.gz",
+    "context-actions-0.2.0-linux-aarch64.tar.gz",
+    "context-actions-0.2.0-1-x86_64.pkg.tar.zst",
     "ContextActions-linux-installer.sh",
     "SHA256SUMS.txt"
   ]

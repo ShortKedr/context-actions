@@ -38,6 +38,10 @@ jobs:
           app=build/macos/archive-check/ContextActions.app
           lipo "$app/Contents/MacOS/ContextActions" -verify_arch arm64 x86_64
           codesign --verify --strict --all-architectures "$app"
+          plist="$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSServices:0:NSMessage' "$plist")" = chooseFileAction
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSServices:0:NSSendFileTypes:0' "$plist")" = public.data
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSServices:0:NSRequiredContext:NSApplicationIdentifier' "$plist")" = com.apple.finder
           sudo installer -pkg dist/macos/*.pkg -target /
           /Applications/ContextActions.app/Contents/MacOS/ContextActions --help
           if sudo installer -pkg dist/macos/*.pkg -target /; then

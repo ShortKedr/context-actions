@@ -1,9 +1,11 @@
 #include "windows/platform_win.h"
 #include <shlobj.h>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
+#include <thread>
 
 namespace {
 void expect(bool value,const char* message){if(!value)throw std::runtime_error(message);}
@@ -14,14 +16,46 @@ ca::ComPtr<IShellItemArray> selection(ca::fs::path const& root,std::initializer_
     ca::ComPtr<IShellItemArray> result;
     ca::check(SHCreateShellItemArrayFromIDLists(static_cast<UINT>(ids.values.size()),const_cast<PCIDLIST_ABSOLUTE*>(ids.values.data()),&result));return result;
 }
+
+int receiveLaunch(int argc, wchar_t** argv) {
+    try {
+        ca::CommandLine command;
+        ca::parseArguments(std::vector<std::wstring>(argv + 1, argv + argc), command);
+        expect(!command.immediate && !command.headless, "Shell launch must wait for Run");
+        const auto receipt = ca::dataDirectory() / (command.chooseAction ? L"chooser.caj" : L"direct.caj");
+        const auto pending = receipt.wstring() + L".pending";
+        ca::saveOptions(command.options, pending);
+        ca::fs::rename(pending, receipt);
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+}
+
+void expectLaunch(IExplorerCommand* command, IShellItemArray* items, const ca::fs::path& receipt,
+                  ca::Action action, const std::vector<ca::fs::path>& files) {
+    ca::fs::remove(receipt);
+    ca::check(command->Invoke(items, nullptr));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!ca::fs::exists(receipt) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    expect(ca::fs::is_regular_file(receipt), "Shell launched the app in the expected mode");
+    const auto options = ca::readJob(receipt);
+    expect(options.action == action && options.files == files, "Shell handoff preserved action and selection order");
+}
 }
 int wmain(int argc,wchar_t** argv){
+    if (ca::fs::path(argv[0]).filename() == L"ContextActions.exe") return receiveLaunch(argc, argv);
     const auto apartment=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);int result=1;
     try{
         ca::check(apartment);expect(argc==3,"Pass shell DLL and isolated test directory");
         auto root=ca::fs::absolute(argv[2])/std::to_wstring(GetCurrentProcessId());ca::fs::create_directories(root);
         SetEnvironmentVariableW(L"CONTEXT_ACTIONS_DATA_DIR",(root/L"state").c_str());ca::setLanguage(L"en");ca::resetOfficeCapabilities();
-        struct Module {HMODULE value;~Module(){if(value)FreeLibrary(value);}} module{LoadLibraryW(argv[1])};expect(module.value!=nullptr,"Load shell DLL");
+        const auto isolatedDll = root / ca::fs::path(argv[1]).filename();
+        ca::fs::copy_file(argv[1], isolatedDll, ca::fs::copy_options::overwrite_existing);
+        ca::fs::copy_file(argv[0], root / L"ContextActions.exe", ca::fs::copy_options::overwrite_existing);
+        struct Module {HMODULE value;~Module(){if(value)FreeLibrary(value);}} module{LoadLibraryW(isolatedDll.c_str())};expect(module.value!=nullptr,"Load shell DLL");
         auto factoryFn=reinterpret_cast<HRESULT(WINAPI*)(REFCLSID,REFIID,void**)>(GetProcAddress(module.value,"DllGetClassObject"));
         auto unloadFn=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(module.value,"DllCanUnloadNow"));expect(factoryFn&&unloadFn,"COM exports");
         expect(unloadFn()==S_OK,"Initially unloadable");
@@ -72,10 +106,15 @@ int wmain(int argc,wchar_t** argv){
             auto mixed=selection(root,{L"backup.tar",L"notes.txt"});
             expect(commands.at(A::repack)->Invoke(mixed.Get(),nullptr)==E_INVALIDARG,"Invalid archive invocation rejected");
             auto image=selection(root,{L"picture.png"});expect(commands.at(A::h264)->Invoke(image.Get(),nullptr)==E_INVALIDARG,"Unsupported invocation rejected");
+            auto files = selection(root, {L"кино & 100% !.mp4", L"second.mov"});
+            const std::vector<ca::fs::path> selected{root / L"кино & 100% !.mp4", root / L"second.mov"};
+            expectLaunch(commands.at(A::more).Get(), files.Get(), root / L"state/chooser.caj", A::more, selected);
+            expectLaunch(commands.at(A::h264).Get(), files.Get(), root / L"state/direct.caj", A::h264, selected);
+            expect(ca::fs::is_empty(root / L"state/jobs"), "GUI launches consume their private shell jobs");
             ca::setOfficeCapability(false,ca::Capability::unavailable);auto doc=selection(root,{L"document.docx"});ca::check(commands.at(A::word)->GetState(doc.Get(),FALSE,&state));expect(state==ECS_DISABLED,"Unavailable Office disabled");
         }
         expect(unloadFn()==S_OK,"All COM references released");
-        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, file and mixed-media selections, Unicode, Office availability, empty and unsupported invocation. No registration or Explorer UI tested.\n";result=0;
+        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, selection filtering, Office availability, and chooser/direct launch handoffs.\n";result=0;
     }catch(std::exception const& e){std::cerr<<e.what()<<'\n';}
     if(SUCCEEDED(apartment))CoUninitialize();return result;
 }

@@ -50,9 +50,31 @@ function Select-Language([string]$Name) {
 }
 try {
     # This test intentionally opens its own native window. It never interacts with another process.
-    $process = Start-Process -FilePath $AppPath -ArgumentList @('--action','rename','--',('"' + $source + '"')) -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru
-    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
-    $window = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition) } 'WinUI window did not appear.'
+    $chooserArguments = @('--choose-action','--',('"' + $source + '"'))
+    $process = Start-Process -FilePath $AppPath -ArgumentList $chooserArguments -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru
+    $processId = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+    $window = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $processId) } 'Action chooser did not appear.'
+    Invoke-Control 'CancelChooser'
+    if (-not $process.WaitForExit(10000)) { throw 'Cancel did not close the action chooser.' }
+    if (-not (Test-Path -LiteralPath $source) -or (Test-Path -LiteralPath $result)) { throw 'Cancel changed the selected file.' }
+
+    $process = Start-Process -FilePath $AppPath -ArgumentList $chooserArguments -WorkingDirectory (Split-Path -Parent $AppPath) -WindowStyle Hidden -PassThru
+    $processId = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+    $window = Wait-For { [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $processId) } 'Action chooser did not reappear.'
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ChooseAction-compress')
+    if ($window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)) { throw 'Chooser offered video compression for a text file.' }
+    Invoke-Control 'ChooseAction-rename'
+    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Run')
+    $window = Wait-For {
+        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $processId)
+        foreach ($candidate in $windows) {
+            try {
+                if ($candidate.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)) { return $candidate }
+            } catch [System.Windows.Automation.ElementNotAvailableException] {
+                # The chooser can close while the next window is being discovered.
+            }
+        }
+    } 'Choosing Rename did not open its settings.'
     if (-not (Test-Path -LiteralPath $source)) { throw 'The configure-first launch changed the file before Run.' }
     Invoke-Control 'PreviewNames'
     $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Files')
@@ -89,7 +111,7 @@ try {
     $transform.Resize(1040,760)
     Invoke-Control 'UndoRename'
     Wait-For { Test-Path -LiteralPath $source } 'Undo did not restore the source.' | Out-Null
-    $report = "PASS: configure-first launch, rename preview, Settings round trip, compact-to-full switch, real rename, narrow result footer and undo."
+    $report = "PASS: action chooser filtering, cancel, configure-first launch, rename preview, Settings round trip, compact-to-full switch, real rename, narrow result footer and undo."
 
     $process.CloseMainWindow() | Out-Null
     if (-not $process.WaitForExit(10000)) { throw 'Rename test window did not close normally.' }

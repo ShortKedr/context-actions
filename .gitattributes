@@ -1,3 +1,4 @@
 *.sh text eol=lf
 /packaging/linux/preinst text eol=lf
 /packaging/linux/arch/PKGBUILD text eol=lf
+/src/linux/**/*.desktop text eol=lf
