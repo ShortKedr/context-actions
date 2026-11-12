@@ -19,7 +19,7 @@ function currentTheme() {
 function applyTheme() {
   const theme = currentTheme();
   document.documentElement.dataset.theme = theme;
-  themeColor.content = theme === "dark" ? "#101724" : "#f7f8f4";
+  themeColor.content = theme === "dark" ? "#131222" : "#f6f5fa";
   themeSwitch?.setAttribute("aria-checked", String(theme === "dark"));
 }
 

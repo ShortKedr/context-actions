@@ -18,9 +18,11 @@ REPOSITORY = "ShortKedr/context-actions"
 FILES = {
     WEB / "site.css": "site.css",
     WEB / "theme.js": "theme.js",
+    WEB / "demo-poster.jpg": "assets/demo-poster.jpg",
     ROOT / "resources" / "logo-150.png": "assets/context-actions.png",
     ROOT / "resources" / "logo-44.png": "resources/logo-44.png",
     ROOT / "docs" / "showcase" / "index.html": "docs/showcase/index.html",
+    ROOT / "docs" / "showcase" / "demo.mp4": "docs/showcase/demo.mp4",
     ROOT / "docs" / "showcase" / "showcase.css": "docs/showcase/showcase.css",
     ROOT / "docs" / "showcase" / "showcase.js": "docs/showcase/showcase.js",
 }

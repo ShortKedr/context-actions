@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Compress videos, resize images, assemble PDFs, and batch rename files with Context Actions for Windows, macOS, and Linux.">
-  <meta name="theme-color" content="#f7f8f4">
+  <meta name="theme-color" content="#f6f5fa">
   <title>Context Actions — File tools for Windows, macOS, and Linux</title>
   <link rel="icon" href="./assets/context-actions.png">
   <script src="./theme.js"></script>
@@ -16,94 +16,63 @@
     <div class="shell header-inner">
       <a class="brand" href="./">
         <img src="./assets/context-actions.png" width="34" height="34" alt="">
-        Context<span>Actions</span>
+        <span>Context<span class="brand-accent">Actions</span></span>
       </a>
+      <button class="theme-switch" type="button" role="switch" aria-label="Dark theme" aria-checked="false" hidden>
+        <span aria-hidden="true">☀︎</span>
+        <span aria-hidden="true">☾</span>
+      </button>
       <nav aria-label="Main navigation">
-        <a href="#downloads">Downloads</a>
         <a href="#actions">Features</a>
         <a href="#walkthrough">Walkthrough</a>
+        <a class="nav-download" href="#downloads">Download <span aria-hidden="true">↓</span></a>
       </nav>
-      <div class="header-actions">
-        <button class="theme-switch" type="button" role="switch" aria-label="Dark theme" aria-checked="false" hidden>
-          <span aria-hidden="true">☀︎</span>
-          <span aria-hidden="true">☾</span>
-        </button>
-        <a class="repo-link" href="https://github.com/ShortKedr/context-actions">GitHub <span aria-hidden="true">↗</span></a>
-      </div>
     </div>
   </header>
 
-  <main id="content">
-    <section class="shell hero" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> @RELEASE_TAG@ · Windows, macOS, Linux</p>
-        <h1 id="hero-title">File tools, a<br class="hero-break"> <em>right-click</em> away.</h1>
-        <p class="hero-description">Compress videos, resize images, assemble PDFs, and rename files in batches. Start right where your files are.</p>
-        <div class="button-row">
-          <a class="button button-primary" href="#downloads">Download Context Actions <span aria-hidden="true">↓</span></a>
-          <a class="button button-secondary" href="#walkthrough"><span class="play-icon" aria-hidden="true"></span> Watch walkthrough</a>
+  <main id="content" tabindex="-1">
+    <section class="hero-band" aria-labelledby="hero-title">
+      <div class="shell hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Windows · macOS · Linux</p>
+          <h1 id="hero-title">File tools, a <em class="keep-together">right-click</em> away.</h1>
+          <p class="hero-description">Compress videos, resize images, assemble PDFs, and rename files in batches. Start right where your files are.</p>
+          <div class="button-row">
+            <a class="button button-primary" href="#downloads">Download Context Actions <span aria-hidden="true">↓</span></a>
+            <a class="button button-secondary" href="#walkthrough"><span class="play-icon" aria-hidden="true"></span> Watch walkthrough</a>
+          </div>
         </div>
-      </div>
 
-      <div class="hero-art" aria-hidden="true">
-        <div class="explorer">
-          <div class="explorer-title">
-            <span class="explorer-tab"><span class="folder-icon"></span> File Explorer</span>
-            <span class="window-buttons">− &nbsp; □ &nbsp; ×</span>
-          </div>
-          <div class="explorer-toolbar">
-            <span class="toolbar-arrows">← &nbsp; ↑</span>
-            <span class="location"><span class="folder-icon"></span> Home <b>›</b> Videos</span>
-          </div>
-          <div class="explorer-content">
-            <div class="sidebar">
-              <div>⌂ &nbsp; Home</div>
-              <div>▤ &nbsp; Documents</div>
-              <div>▧ &nbsp; Pictures</div>
-              <div class="sidebar-active">▷ &nbsp; Videos</div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="explorer">
+            <div class="explorer-title">
+              <span class="explorer-tab"><span class="folder-icon"></span> File Explorer</span>
+              <span class="window-buttons">− &nbsp; □ &nbsp; ×</span>
             </div>
             <div class="file-list">
-              <div class="file-list-heading"><span>Name</span><span>Type</span></div>
-              <div class="file-selected"><span><i class="file-icon"></i> trail.mov</span><span>MOV file</span></div>
-              <div class="file-row"><span><i class="file-icon"></i> outtakes.mp4</span><span>MP4 file</span></div>
+              <div class="file-selected"><span class="file-icon">▸</span> trail.mov</div>
+            </div>
+          </div>
+
+          <div class="context-menu">
+            <div class="menu-title">
+              <img src="./assets/context-actions.png" width="23" height="23" alt="">
+              Context Actions
+            </div>
+            <div class="menu-items">
+              <div><span class="menu-symbol">⇲</span> Compress video</div>
+              <div class="menu-selected"><span class="menu-symbol">▷</span> Convert to MP4 / H.264</div>
+              <div><span class="menu-symbol">▣</span> Compact copy / H.265</div>
+              <div><span class="menu-symbol">➤</span> Telegram animation…</div>
             </div>
           </div>
         </div>
-
-        <div class="context-menu">
-          <div class="menu-title">
-            <img src="./assets/context-actions.png" width="23" height="23" alt="">
-            Context Actions
-          </div>
-          <div class="menu-items">
-            <div><span class="menu-symbol">⇲</span> Compress video</div>
-            <div class="menu-selected"><span class="menu-symbol">▷</span> Convert to MP4 / H.264</div>
-            <div><span class="menu-symbol">▣</span> Compact copy / H.265</div>
-            <div><span class="menu-symbol">➤</span> Telegram animation…</div>
-          </div>
-          <span class="pointer"></span>
-        </div>
-        <span class="art-caption">File Explorer · Menu illustration</span>
-      </div>
-    </section>
-
-    <section class="downloads section-band" id="downloads" aria-labelledby="downloads-title">
-      <div class="shell">
-        <h2 id="downloads-title">Download for your platform.</h2>
-        <!-- DOWNLOAD_CARDS -->
-        <div class="download-links">
-          <a class="text-link" href="@RELEASE_URL@">Release notes <span aria-hidden="true">↗</span></a>
-          <!-- CHECKSUM_LINK -->
-          <a class="text-link" href="https://github.com/ShortKedr/context-actions/blob/HEAD/docs/build.md">Build from source <span aria-hidden="true">↗</span></a>
-        </div>
-        <p class="download-access">GitHub sign-in may be required to download.</p>
       </div>
     </section>
 
     <section class="features section-band" id="actions" aria-labelledby="features-title">
       <div class="shell">
-        <p class="eyebrow">Features</p>
-        <h2 id="features-title">Find the right action for your files.</h2>
+        <h2 id="features-title">What you can do</h2>
         <div class="feature-grid">
           <article class="feature-card">
             <span class="feature-icon video-icon" aria-hidden="true"><i></i></span>
@@ -136,8 +105,7 @@
     <section class="shell walkthrough" id="walkthrough" aria-labelledby="walkthrough-title">
       <div class="walkthrough-copy">
         <p class="eyebrow">10-second walkthrough</p>
-        <h2 id="walkthrough-title">From right-click to MP4.</h2>
-        <p>See the File Explorer menu, the compact action window, and the result in this recreated preview.</p>
+        <h2 id="walkthrough-title">From <span class="keep-together">right-click</span> to MP4</h2>
         <ol class="steps">
           <li>Right-click a video in File Explorer.</li>
           <li>Choose <strong>Convert to MP4 / H.264</strong>.</li>
@@ -145,16 +113,34 @@
         </ol>
       </div>
       <div class="walkthrough-frame">
-        <iframe src="./docs/showcase/index.html?embed" title="Recreated walkthrough of converting a video to MP4" loading="lazy" tabindex="-1"></iframe>
+        <video controls playsinline preload="none" width="1280" height="720"
+          poster="./assets/demo-poster.jpg" aria-label="Video walkthrough of converting a file to MP4">
+          <source src="./docs/showcase/demo.mp4" type="video/mp4">
+          <a href="./docs/showcase/demo.mp4">Open the MP4 walkthrough</a>
+        </video>
       </div>
     </section>
 
+    <section class="downloads section-band" id="downloads" aria-labelledby="downloads-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="downloads-title">Download for your platform</h2>
+          <a class="text-link" href="@RELEASE_URL@">Release notes for @RELEASE_TAG@ <span aria-hidden="true">↗</span></a>
+        </div>
+        <!-- DOWNLOAD_CARDS -->
+        <div class="download-links">
+          <!-- CHECKSUM_LINK -->
+          <a class="text-link" href="https://github.com/ShortKedr/context-actions/blob/HEAD/docs/build.md">Build from source <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="download-access">GitHub sign-in may be required to download.</p>
+      </div>
+    </section>
   </main>
 
   <footer class="shell site-footer">
     <a class="brand" href="./">
       <img src="./assets/context-actions.png" width="30" height="30" alt="">
-      Context<span>Actions</span>
+      <span>Context<span class="brand-accent">Actions</span></span>
     </a>
     <div class="footer-links">
       <a href="https://github.com/ShortKedr/context-actions">Source code <span aria-hidden="true">↗</span></a>
