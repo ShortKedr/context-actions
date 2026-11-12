@@ -77,17 +77,27 @@ try {
     } 'Choosing Rename did not open its settings.'
     if (-not (Test-Path -LiteralPath $source)) { throw 'The configure-first launch changed the file before Run.' }
     Invoke-Control 'PreviewNames'
-    $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Files')
-    $files = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    $filesCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Files')
+    $files = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $filesCondition)
     $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
     $row = $files.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
     ([System.Windows.Automation.SelectionItemPattern]$row.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()
+    $selectedFileIsVisible = {
+        try {
+            $visibleFiles = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $filesCondition)
+            if ($null -eq $visibleFiles -or $visibleFiles.Current.IsOffscreen) { return $false }
+            $selection = ([System.Windows.Automation.SelectionPattern]$visibleFiles.GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern)).Current.GetSelection()
+            return $selection.Count -eq 1 -and $selection[0].Current.Name -eq $source
+        } catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $false
+        }
+    }
+    Wait-For $selectedFileIsVisible 'The file did not become selected before opening Settings.' | Out-Null
     Invoke-Control 'Settings'
     Select-Language ('Fran' + [char]231 + 'ais')
     Select-Language 'English'
     Invoke-Control 'BackToFiles'
-    $selection = ([System.Windows.Automation.SelectionPattern]$files.GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern)).Current.GetSelection()
-    if ($selection.Count -ne 1 -or $selection[0].Current.Name -ne $source) { throw 'Language changes lost the selected file.' }
+    Wait-For $selectedFileIsVisible 'Language changes lost the selected file.' | Out-Null
     Invoke-Control 'ExpandWorkspace'
     Invoke-Control 'Run'
     Wait-For { Test-Path -LiteralPath $result } 'Rename did not run: preview may have been lost when switching views.' | Out-Null
@@ -153,8 +163,19 @@ try {
     $expand.Collapse()
     Invoke-Control 'Run'
     Wait-For { Test-Path -LiteralPath $sevenZip } 'Repack did not use the selected 7Z target.' | Out-Null
-    $item = & "$env:SystemRoot\System32\tar.exe" -xOf $sevenZip 'item.txt'
-    if ($LASTEXITCODE -ne 0 -or $item -ne 'Archive UI smoke') { throw 'Repack changed or omitted the 7Z archived file.' }
+    # The system tar on Windows 10 cannot reliably extract 7z archives.
+    $roundTripDirectory = Join-Path $scratch 'verify-7z'
+    New-Item -ItemType Directory -Path $roundTripDirectory | Out-Null
+    $roundTripReport = Join-Path $roundTripDirectory 'report.txt'
+    & $AppPath --headless --report $roundTripReport --action repack --format zip --output $roundTripDirectory -- $sevenZip | Out-Null
+    $roundTripZip = Join-Path $roundTripDirectory 'repack.zip'
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $roundTripZip -PathType Leaf)) { throw "The app could not read back the 7Z archive. Report: $roundTripReport" }
+    [IO.Compression.ZipFile]::ExtractToDirectory($roundTripZip, $roundTripDirectory)
+    $recoveredItem = Join-Path $roundTripDirectory 'item.txt'
+    if (-not (Test-Path -LiteralPath $recoveredItem -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $recoveredItem).Hash -ne (Get-FileHash -LiteralPath (Join-Path $fixture 'item.txt')).Hash) {
+        throw 'Repack changed or omitted the 7Z archived file.'
+    }
 
     $process.CloseMainWindow() | Out-Null
     if (-not $process.WaitForExit(10000)) { throw 'Repack test window did not close normally.' }

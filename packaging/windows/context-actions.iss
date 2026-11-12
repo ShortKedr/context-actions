@@ -5,7 +5,7 @@
  #error OutputDir is required
 #endif
 #ifndef AppVersion
- #define AppVersion "0.2.0"
+ #define AppVersion "0.3.0"
 #endif
 #define AppGuid "A836FB4F-6548-4FC3-8D67-50267B25A418"
 [Setup]
@@ -18,7 +18,7 @@ DefaultGroupName=Context Actions
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.22000
+MinVersion=10.0.19045
 Compression=lzma2/ultra64
 SolidCompression=yes
 OutputDir={#OutputDir}
@@ -29,6 +29,7 @@ WizardStyle=modern
 DisableProgramGroupPage=yes
 CloseApplications=no
 RestartApplications=no
+ChangesAssociations=yes
 LicenseFile=..\..\docs\preview-license.txt
 
 [Languages]
@@ -56,17 +57,18 @@ french.AllowReplacement=Autoriser la réinstallation ou le retour à une version
 french.VersionUnknown=Impossible de déterminer la version installée de Context Actions.
 
 [Tasks]
-Name: "shell"; Description: "File Explorer context menus (local preview; requires Developer Mode already enabled)"; Flags: unchecked
+Name: "shell"; Description: "File Explorer context menus (classic menu)"; Flags: unchecked; OnlyBelowVersion: 10.0.22000
+Name: "shell"; Description: "File Explorer context menus (local preview; requires Developer Mode already enabled)"; Flags: unchecked; MinVersion: 10.0.22000
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 #ifdef DownloadEngines
-Source: "{tmp}\{#FFmpegRoot}\bin\ffmpeg.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFmpegBytes}; Flags: external ignoreversion
-Source: "{tmp}\{#FFmpegRoot}\bin\ffprobe.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFprobeBytes}; Flags: external ignoreversion
-Source: "{tmp}\{#FFmpegRoot}\*"; DestDir: "{app}\licenses\ffmpeg"; ExternalSize: {#FFmpegNoticeBytes}; Flags: external ignoreversion
-Source: "{tmp}\{#QpdfRoot}\bin\qpdf.exe"; DestDir: "{app}\engines"; ExternalSize: {#QpdfBytes}; Flags: external ignoreversion
-Source: "{tmp}\{#QpdfRoot}\bin\*.dll"; DestDir: "{app}\engines"; ExternalSize: {#QpdfLibraryBytes}; Flags: external ignoreversion
-Source: "{tmp}\{#QpdfRoot}\share\*"; DestDir: "{app}\licenses\qpdf\share"; ExternalSize: {#QpdfNoticeBytes}; Flags: external ignoreversion recursesubdirs createallsubdirs
+Source: "{tmp}\ffmpeg\{#FFmpegRoot}\bin\ffmpeg.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFmpegBytes}; Flags: external ignoreversion
+Source: "{tmp}\ffmpeg\{#FFmpegRoot}\bin\ffprobe.exe"; DestDir: "{app}\engines"; ExternalSize: {#FFprobeBytes}; Flags: external ignoreversion
+Source: "{tmp}\ffmpeg\{#FFmpegRoot}\*"; DestDir: "{app}\licenses\ffmpeg"; ExternalSize: {#FFmpegNoticeBytes}; Flags: external ignoreversion
+Source: "{tmp}\qpdf\{#QpdfRoot}\bin\qpdf.exe"; DestDir: "{app}\engines"; ExternalSize: {#QpdfBytes}; Flags: external ignoreversion
+Source: "{tmp}\qpdf\{#QpdfRoot}\bin\*.dll"; DestDir: "{app}\engines"; ExternalSize: {#QpdfLibraryBytes}; Flags: external ignoreversion
+Source: "{tmp}\qpdf\{#QpdfRoot}\share\*"; DestDir: "{app}\licenses\qpdf\share"; ExternalSize: {#QpdfNoticeBytes}; Flags: external ignoreversion recursesubdirs createallsubdirs
 #endif
 
 [Icons]
@@ -122,15 +124,25 @@ begin
 end;
 
 #ifdef DownloadEngines
-procedure UnpackMediaTools(const ArchiveName: String);
-var TempDir: String; Code: Integer;
+procedure UnpackMediaTools(const Name: String);
+var ArchiveName, TempDir, Destination, Arguments: String; Code: Integer;
 begin
+  ArchiveName := Name + '.zip';
   TempDir := ExpandConstant('{tmp}');
-  if not Exec(ExpandConstant('{sys}\tar.exe'), '-xf "' + TempDir + '\' + ArchiveName +
-    '" -C "' + TempDir + '"', TempDir, SW_HIDE, ewWaitUntilTerminated, Code) then
-    RaiseException('Windows tar could not start: ' + SysErrorMessage(Code));
+  Destination := TempDir + '\' + Name;
+  if DirExists(Destination) then
+    if not DelTree(Destination, True, True, True) then
+      RaiseException('Setup could not clear the extraction directory for ' + ArchiveName + '.');
+  Log('Extracting ' + ArchiveName + ' with Windows PowerShell');
+  { Resolve relative paths in the child process without interpolating the user's temp path. }
+  Arguments := '-NoProfile -NonInteractive -Command "$ErrorActionPreference = ''Stop''; ' +
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem; ' +
+    '[IO.Compression.ZipFile]::ExtractToDirectory(''' + ArchiveName + ''', ''' + Name + ''')"';
+  if not ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Arguments,
+    TempDir, SW_HIDE, ewWaitUntilTerminated, Code, nil) then
+    RaiseException('Windows PowerShell could not start: ' + SysErrorMessage(Code));
   if Code <> 0 then
-    RaiseException('Windows tar could not extract ' + ArchiveName + ' (exit code ' + IntToStr(Code) + ').');
+    RaiseException('Windows PowerShell could not extract ' + ArchiveName + ' (exit code ' + IntToStr(Code) + ').');
 end;
 #endif
 
@@ -156,8 +168,8 @@ begin
   try
     try
       MediaToolsPage.Download;
-      UnpackMediaTools('ffmpeg.zip');
-      UnpackMediaTools('qpdf.zip');
+      UnpackMediaTools('ffmpeg');
+      UnpackMediaTools('qpdf');
     except
       Result := 'Setup could not prepare the media tools. ' + GetExceptionMessage;
     end;
@@ -167,30 +179,45 @@ begin
 #endif
 end;
 
+function UsesModernExplorerMenu(): Boolean;
+var Version: TWindowsVersion;
+begin
+  GetWindowsVersionEx(Version);
+  Result := Version.Build >= 22000;
+end;
+
 function ShellRegistration(const Mode: String): Boolean;
 var Code: Integer; Arguments: String;
 begin
   Arguments := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\register-shell.ps1') + '" -Mode ' + Mode;
-  if Mode = 'Install' then Arguments := Arguments + ' -Development';
+  if (Mode = 'Install') and UsesModernExplorerMenu() then Arguments := Arguments + ' -Development';
   Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     Arguments,
     ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var Message: String;
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('shell') then begin
-    if not ShellRegistration('Install') then
-      MsgBox('Context Actions was installed, but Explorer registration failed. The local preview requires Developer Mode to be enabled beforehand. No Windows security settings were changed. See docs\build.md for registration details.', mbError, MB_OK);
+    if not ShellRegistration('Install') then begin
+      Message := 'Context Actions was installed, but Explorer registration failed.';
+      if UsesModernExplorerMenu() then
+        Message := Message + ' The local preview requires Developer Mode to be enabled beforehand.';
+      MsgBox(Message + ' See docs\build.md for registration details.', mbError, MB_OK);
+    end;
   end;
 end;
 
-function InitializeUninstall(): Boolean;
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  Result := True;
-  if RegKeyExists(HKCU, 'Software\Classes\CLSID\{A836FB4F-6548-4FC3-8D67-50267B25A418}') then
+  if CurUninstallStep <> usUninstall then Exit;
+  if RegKeyExists(HKCU64, 'Software\Classes\*\shell\ContextActions') or
+     RegKeyExists(HKCU64, 'Software\Classes\*\shell\ContextActions.Legacy') or
+     RegKeyExists(HKCU64, 'Software\Classes\CLSID\{A836FB4F-6548-4FC3-8D67-50267B25A418}') or
+     RegKeyExists(HKCU64, 'Software\Classes\CLSID\{EE9D6C0B-0A19-4F8C-8E61-C78DD8816DB0}') then
     if not ShellRegistration('Uninstall') then begin
       MsgBox('Explorer unregistration failed. Run packaging\register-shell.ps1 -Mode Uninstall before removing the application.', mbError, MB_OK);
-      Result := False;
+      Abort;
     end;
 end;

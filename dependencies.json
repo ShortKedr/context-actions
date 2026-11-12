@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "architecture": "x64",
   "toolchain": {"generator": "Visual Studio 17 2022", "toolset": "v143", "sdk": "10.0.22621.0", "cmakeMinimum": "3.25"},
   "ffmpeg": {

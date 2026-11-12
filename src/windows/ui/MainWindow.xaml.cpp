@@ -16,6 +16,37 @@ using namespace winrt::Microsoft::UI::Xaml::Automation;
 using namespace winrt::Microsoft::UI::Windowing;
 
 namespace {
+bool useWindows11Frame() {
+    static const bool supported = [] {
+        OSVERSIONINFOEXW version{};
+        version.dwOSVersionInfoSize = sizeof(version);
+        version.dwBuildNumber = 22000;
+        const auto condition = VerSetConditionMask(0, VER_BUILDNUMBER, VER_GREATER_EQUAL);
+        return VerifyVersionInfoW(&version, VER_BUILDNUMBER, condition) != FALSE;
+    }();
+    return supported;
+}
+void resizeWindows10Workspace(AppWindow const& window, HWND handle, int width) {
+    const auto dpi = GetDpiForWindow(handle);
+    const auto pixelsWide = MulDiv(width, dpi, 96);
+    const auto pixelsHigh = MulDiv(760, dpi, 96);
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    if (!GetMonitorInfoW(MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST), &monitor)) {
+        window.Resize({pixelsWide, pixelsHigh});
+        return;
+    }
+    const auto& area = monitor.rcWork;
+    const auto fittedWidth = std::min<LONG>(pixelsWide, area.right - area.left);
+    const auto fittedHeight = std::min<LONG>(pixelsHigh, area.bottom - area.top);
+    const auto position = window.Position();
+    window.MoveAndResize({
+        std::clamp<LONG>(position.X, area.left, area.right - fittedWidth),
+        std::clamp<LONG>(position.Y, area.top, area.bottom - fittedHeight),
+        fittedWidth,
+        fittedHeight,
+    });
+}
 Visibility visible(bool value){return value?Visibility::Visible:Visibility::Collapsed;}
 auto label(char const* key){return box_value(ca::tr(key));}
 bool video(ca::Action a){return a==ca::Action::compress||a==ca::Action::h264||a==ca::Action::h265||a==ca::Action::telegram;}
@@ -78,7 +109,20 @@ int number(NumberBox const& box){
 namespace winrt::ContextActions::implementation {
 MainWindow::MainWindow() {
     InitializeComponent();
-    ExtendsContentIntoTitleBar(true);SetTitleBar(AppTitleBar());
+    if (useWindows11Frame()) {
+        SystemBackdrop(MicaBackdrop());
+        ExtendsContentIntoTitleBar(true);
+        SetTitleBar(AppTitleBar());
+    } else {
+        SolidBackdrop().Visibility(Visibility::Visible);
+        AppTitleBar().RightHeader(nullptr);
+        AppTitleBar().Visibility(Visibility::Collapsed);
+        auto actions = WindowActions();
+        Grid::SetColumn(actions, 1);
+        actions.VerticalAlignment(VerticalAlignment::Top);
+        WorkspaceHeader().ColumnSpacing(12);
+        WorkspaceHeader().Children().Append(actions);
+    }
     Window window=*this;check_hresult(window.as<IWindowNative>()->get_WindowHandle(&hwnd_));
     auto icon=LoadIconW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(101));
     SendMessageW(hwnd_,WM_SETICON,ICON_BIG,reinterpret_cast<LPARAM>(icon));
@@ -98,7 +142,12 @@ MainWindow::MainWindow() {
     RevealButton().Click([this](auto&&,auto&&){Try([&]{OpenResult(true);});});
     SettingsButton().Click([this](auto&&,auto&&){Try([&]{if(!settings_)ReadOptions();ShowSettings(!settings_);});});
     BackButton().Click([this](auto&&,auto&&){ShowSettings(false);});
-    ExpandButton().Click([this](auto&&,auto&&){Try([&]{ReadOptions();compact_=false;ExpandButton().Visibility(Visibility::Collapsed);AppWindow().Resize({MulDiv(1040,GetDpiForWindow(hwnd_),96),MulDiv(760,GetDpiForWindow(hwnd_),96)});ActionChanged();Layout();});});
+    ExpandButton().Click([this](auto&&,auto&&){Try([&]{
+        ReadOptions();compact_=false;ExpandButton().Visibility(Visibility::Collapsed);
+        if (useWindows11Frame()) AppWindow().Resize({MulDiv(1040,GetDpiForWindow(hwnd_),96),MulDiv(760,GetDpiForWindow(hwnd_),96)});
+        else resizeWindows10Workspace(AppWindow(), hwnd_, 1040);
+        ActionChanged();Layout();
+    });});
     OfficeButton().Click([this](auto&&,auto&&){Try([&]{ca::resetOfficeCapabilities();RefreshActions(false);MessageBar().Severity(InfoBarSeverity::Success);MessageBar().Message(ca::tr("ready"));MessageBar().IsOpen(true);});});
     CategoryBox().SelectionChanged([this](auto&&,auto&&){if(!updating_)Try([&]{ReadOptions();RefreshActions(false);});});
     ActionBox().SelectionChanged([this](auto&&,auto&&){if(!updating_)Try([&]{ReadOptions();auto i=ActionBox().SelectedIndex();if(i>=0){if(options_.action!=visibleActions_.at(i))InvalidatePreview();options_.action=visibleActions_.at(i);ActionChanged();}});});
@@ -142,8 +191,12 @@ void MainWindow::Configure(ca::Options options,bool immediate) {
     for(auto name:{L"English",L"Русский",L"Deutsch",L"Français",L"简体中文"})LanguageBox().Items().Append(box_value(name));
     auto lang=ca::language();LanguageBox().SelectedIndex(lang.starts_with(L"ru")?1:lang.starts_with(L"de")?2:lang.starts_with(L"fr")?3:lang.starts_with(L"zh")?4:0);
     Localize();RefreshFiles();RefreshActions(true);ApplyTheme();updating_=false;
-    RECT work{};SystemParametersInfoW(SPI_GETWORKAREA,0,&work,0);int dpi=GetDpiForWindow(hwnd_);
-    AppWindow().Resize({std::min<LONG>(MulDiv(compact_?620:1040,dpi,96),work.right-work.left),std::min<LONG>(MulDiv(760,dpi,96),work.bottom-work.top)});
+    if (useWindows11Frame()) {
+        RECT work{};SystemParametersInfoW(SPI_GETWORKAREA,0,&work,0);int dpi=GetDpiForWindow(hwnd_);
+        AppWindow().Resize({std::min<LONG>(MulDiv(compact_?620:1040,dpi,96),work.right-work.left),std::min<LONG>(MulDiv(760,dpi,96),work.bottom-work.top)});
+    } else {
+        resizeWindows10Workspace(AppWindow(), hwnd_, compact_ ? 620 : 1040);
+    }
     ExpandButton().Visibility(visible(compact_));Layout();
     if(immediate)DispatcherQueue().TryEnqueue([weak=get_weak()]{if(auto self=weak.get())self->Try([&]{self->Start();});});
 }
@@ -354,7 +407,9 @@ void MainWindow::ShowSettings(bool show){
 }
 void MainWindow::ApplyTheme(){
     auto selected=ThemeBox().SelectedIndex();Root().RequestedTheme(selected==1?ElementTheme::Light:selected==2?ElementTheme::Dark:ElementTheme::Default);
-    AppWindow().TitleBar().PreferredTheme(selected==1?TitleBarTheme::Light:selected==2?TitleBarTheme::Dark:TitleBarTheme::UseDefaultAppMode);
+    if (useWindows11Frame()) {
+        AppWindow().TitleBar().PreferredTheme(selected==1?TitleBarTheme::Light:selected==2?TitleBarTheme::Dark:TitleBarTheme::UseDefaultAppMode);
+    }
 }
 void MainWindow::OpenResult(bool reveal){
     auto index=FileList().SelectedIndex();ca::fs::path chosen=index>=0&&index<static_cast<int>(outputs_.size())?outputs_[index]:ca::fs::path{};

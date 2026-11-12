@@ -7,6 +7,8 @@ using namespace Microsoft::WRL;
 namespace {
 // Keep synchronized with packaging/windows/AppxManifest.xml and register-shell.ps1.
 const CLSID commandClsid={0xa836fb4f,0x6548,0x4fc3,{0x8d,0x67,0x50,0x26,0x7b,0x25,0xa4,0x18}};
+// Windows 10's DelegateExecute verb is registered by register-shell.ps1.
+const CLSID classicClsid={0xee9d6c0b,0x0a19,0x4f8c,{0x8e,0x61,0xc7,0x8d,0xd8,0x81,0x6d,0xb0}};
 HMODULE module=nullptr;std::atomic_long objects=0;
 ca::fs::path directory(){wchar_t path[32768];GetModuleFileNameW(module,path,32768);return ca::fs::path(path).parent_path();}
 std::vector<ca::fs::path> selection(IShellItemArray* items){
@@ -14,6 +16,28 @@ std::vector<ca::fs::path> selection(IShellItemArray* items){
     if(count>100000)throw std::runtime_error("Too many files");
     for(DWORD i=0;i<count;++i){ComPtr<IShellItem> item;ca::check(items->GetItemAt(i,&item));PWSTR path=nullptr;ca::check(item->GetDisplayName(SIGDN_FILESYSPATH,&path));files.emplace_back(path);CoTaskMemFree(path);}
     return files;
+}
+HRESULT launchAction(ca::Action action, IShellItemArray* items) noexcept {
+    try {
+        ca::Options options;
+        options.action = action;
+        options.files = selection(items);
+        if (options.files.empty() || !ca::accepts(action, options.files) ||
+            (action == ca::Action::repack && !ca::unavailableReason(action, options.files).empty()))
+            return E_INVALIDARG;
+        const auto job = ca::writeJob(options);
+        try {
+            std::vector<std::wstring> args{L"--job", job.wstring()};
+            if (action == ca::Action::more) args.push_back(L"--choose-action");
+            ca::launch(directory() / L"ContextActions.exe", args);
+        } catch (...) {
+            ca::consumeJob(job);
+            throw;
+        }
+        return S_OK;
+    } catch (...) {
+        return E_FAIL;
+    }
 }
 class Command;
 class Enumerator final:public RuntimeClass<RuntimeClassFlags<ClassicCom>,IEnumExplorerCommand>{
@@ -53,16 +77,7 @@ public:
         }catch(...){return S_OK;}
     }
     IFACEMETHODIMP Invoke(IShellItemArray* items,IBindCtx*) override{
-        try{
-            ca::Options options;options.action=action;options.files=selection(items);if(options.files.empty())return E_INVALIDARG;
-            if(!ca::accepts(action,options.files)||
-                (action==ca::Action::repack&&!ca::unavailableReason(action,options.files).empty()))return E_INVALIDARG;
-            auto job=ca::writeJob(options);
-            std::vector<std::wstring> args{L"--job",job.wstring()};
-            if(action==ca::Action::more)args.push_back(L"--choose-action");
-            try{ca::launch(directory()/L"ContextActions.exe",args);}catch(...){ca::consumeJob(job);throw;}
-            return S_OK;
-        }catch(...){return E_FAIL;}
+        return launchAction(action, items);
     }
     IFACEMETHODIMP GetFlags(EXPCMDFLAGS* flags) override{if(!flags)return E_POINTER;*flags=root?ECF_HASSUBCOMMANDS:ECF_DEFAULT;return S_OK;}
     IFACEMETHODIMP EnumSubCommands(IEnumExplorerCommand** result) override{
@@ -75,13 +90,45 @@ public:
         }catch(...){return E_OUTOFMEMORY;}
     }
 };
-class Factory final:public RuntimeClass<RuntimeClassFlags<ClassicCom>,IClassFactory>{
+class ClassicCommand final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IExecuteCommand, IObjectWithSelection> {
+    ComPtr<IShellItemArray> items;
+    bool noShowUI = false;
+
 public:
-    Factory(){++objects;}~Factory(){--objects;}
-    IFACEMETHODIMP CreateInstance(IUnknown* outer,REFIID id,void** result) override{if(!result)return E_POINTER;*result=nullptr;if(outer)return CLASS_E_NOAGGREGATION;auto command=Make<Command>();return command?command->QueryInterface(id,result):E_OUTOFMEMORY;}
+    ClassicCommand() { ++objects; }
+    ~ClassicCommand() { --objects; }
+
+    IFACEMETHODIMP SetKeyState(DWORD) override { return S_OK; }
+    IFACEMETHODIMP SetParameters(PCWSTR) override { return S_OK; }
+    IFACEMETHODIMP SetPosition(POINT) override { return S_OK; }
+    IFACEMETHODIMP SetShowWindow(int) override { return S_OK; }
+    IFACEMETHODIMP SetDirectory(PCWSTR) override { return S_OK; }
+    IFACEMETHODIMP SetNoShowUI(BOOL suppress) override { noShowUI = suppress != FALSE; return S_OK; }
+    IFACEMETHODIMP Execute() override {
+        if (noShowUI) return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        return launchAction(ca::Action::more, items.Get());
+    }
+    IFACEMETHODIMP SetSelection(IShellItemArray* selection) override { items = selection; return S_OK; }
+    IFACEMETHODIMP GetSelection(REFIID iid, void** result) override {
+        if (!result) return E_POINTER;
+        *result = nullptr;
+        return items ? items.CopyTo(iid, result) : E_FAIL;
+    }
+};
+class Factory final:public RuntimeClass<RuntimeClassFlags<ClassicCom>,IClassFactory>{
+    bool classic;
+public:
+    explicit Factory(bool useClassic):classic(useClassic){++objects;}~Factory(){--objects;}
+    IFACEMETHODIMP CreateInstance(IUnknown* outer,REFIID id,void** result) override{
+        if(!result)return E_POINTER;
+        *result=nullptr;
+        if(outer)return CLASS_E_NOAGGREGATION;
+        if(classic){auto command=Make<ClassicCommand>();return command?command->QueryInterface(id,result):E_OUTOFMEMORY;}
+        auto command=Make<Command>();return command?command->QueryInterface(id,result):E_OUTOFMEMORY;
+    }
     IFACEMETHODIMP LockServer(BOOL lock) override{if(lock)++objects;else --objects;return S_OK;}
 };
 }
-extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid,REFIID iid,void** result){if(!result)return E_POINTER;*result=nullptr;if(clsid!=commandClsid)return CLASS_E_CLASSNOTAVAILABLE;auto factory=Make<Factory>();return factory?factory->QueryInterface(iid,result):E_OUTOFMEMORY;}
+extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid,REFIID iid,void** result){if(!result)return E_POINTER;*result=nullptr;if(clsid!=commandClsid&&clsid!=classicClsid)return CLASS_E_CLASSNOTAVAILABLE;auto factory=Make<Factory>(clsid==classicClsid);return factory?factory->QueryInterface(iid,result):E_OUTOFMEMORY;}
 extern "C" HRESULT __stdcall DllCanUnloadNow(){return objects==0?S_OK:S_FALSE;}
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,void*){if(reason==DLL_PROCESS_ATTACH){module=instance;DisableThreadLibraryCalls(instance);}return TRUE;}

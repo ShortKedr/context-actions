@@ -1,6 +1,6 @@
 # Context Actions supported formats and file operations
 
-Context Actions supports Windows 11 x64, macOS 11+ on Intel and Apple Silicon, and Linux x86-64 and ARM64 with GTK 4.6+. See the platform build and dependency details. [Build instructions](build.md)
+Context Actions targets Windows 10 22H2 and Windows 11 on x64, macOS 11+ on Intel and Apple Silicon, and Linux x86-64 and ARM64 with GTK 4.6+. See the platform build and dependency details. [Build instructions](build.md)
 
 ## Format conversions
 

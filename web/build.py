@@ -113,9 +113,14 @@ def render_index():
     base = f"https://github.com/{repository}/releases"
     urls = {name: f"{base}/download/{tag}/{quote(name, safe='')}" for name in names}
     version = tag[1:]
+    windows_description = (
+        "Windows 10 22H2 and Windows 11 · x64"
+        if tuple(map(int, version.split("."))) > (0, 2, 0)
+        else "Windows 11 · x64"
+    )
     cards = (
         platform_card(
-            "Windows", "Windows 11 · x64",
+            "Windows", windows_description,
             (f"ContextActions-{version}-win-x64-setup.exe", "Download setup (.exe)"),
             ("ContextActions-win-x64.zip", "Portable ZIP"), urls,
         ),

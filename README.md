@@ -1,4 +1,4 @@
-# Context Actions 0.2
+# Context Actions 0.3
 
 Compress videos, resize images, combine scans into a PDF, and rename files in batches. A shared C++ core runs the same batch actions in WinUI 3 on Windows, AppKit on macOS, and GTK 4 on Linux.
 
@@ -17,7 +17,7 @@ The walkthrough recreates the File Explorer and WinUI 3 preview screens with a s
 
 See the [format-to-format conversion table](docs/support.md#format-conversions) and the [file operations and limits](docs/support.md#file-operations).
 
-Right-click selected files and open the action chooser through **Context Actions → More Actions…** in Windows File Explorer, **Services → Context Actions…** in macOS Finder, or **Context Actions** in GNOME Files and KDE Dolphin. The chooser shows actions for the entire selection. Choose an action, review its settings, then select **Run**. Finder and other Linux file managers can also use **Open With**. The workspace accepts files by picker, drag and drop, or command line.
+Right-click selected files and open the action chooser through **Context Actions** in Windows 10 File Explorer, **Context Actions → More Actions…** in Windows 11 File Explorer, **Services → Context Actions…** in macOS Finder, or **Context Actions** in GNOME Files and KDE Dolphin. The chooser shows actions for the entire selection. Choose an action, review its settings, then select **Run**. Finder and other Linux file managers can also use **Open With**. The workspace accepts files by picker, drag and drop, or command line.
 
 Batches show per-file results and can be canceled. Conversions keep the originals and use unique output names. Scripts can run actions with `--headless` and `--report`.
 
@@ -27,15 +27,15 @@ The app uses shared English, Russian, German, French, and Simplified Chinese tra
 
 | Platform | Native app | GitHub Actions artifacts |
 | --- | --- | --- |
-| Windows 11 x64 | WinUI 3 and File Explorer integration | Portable ZIP and Inno Setup EXE |
+| Windows 10 22H2 and Windows 11 x64 | WinUI 3 and File Explorer integration | Portable ZIP and Inno Setup EXE |
 | macOS 11+, Intel and Apple Silicon | AppKit with Finder Services and Open With | Universal app ZIP and PKG |
 | Linux x86-64 and ARM64 | GTK 4.6+ with GNOME Files and KDE Dolphin context menus | DEB, RPM, Arch x86-64 package, and portable tar archive |
 
-Get app archives and installers from [GitHub Releases](https://github.com/ShortKedr/context-actions/releases). Windows Setup downloads and verifies the media tools and offers File Explorer integration as an opt-in option. The Windows portable app can use media tools on `PATH`. On macOS, install them with `brew install ffmpeg-full qpdf`. Linux packages declare their media dependencies. The portable Linux build uses the distribution's GTK 4, FFmpeg, and qpdf packages. [Local build and installation instructions](docs/build.md)
+Get app archives and installers from [GitHub Releases](https://github.com/ShortKedr/context-actions/releases). Windows Setup downloads and verifies the media tools and offers File Explorer integration as an opt-in option. The published 0.2.0 Windows builds predate Windows 10 support. The Windows portable app can use media tools on `PATH`. On macOS, install them with `brew install ffmpeg-full qpdf`. Linux packages declare their media dependencies. The portable Linux build uses the distribution's GTK 4, FFmpeg, and qpdf packages. [Local build and installation instructions](docs/build.md)
 
 ## Preview status
 
-The installers are preview builds. The macOS package is unsigned and the app uses ad-hoc signing. The modern File Explorer menu has been exercised on a development machine. Classic **Show more options** integration, full UI coverage, clean-machine installation, and Office layout fidelity still need validation.
+The installers are preview builds. The macOS package is unsigned and the app uses ad-hoc signing. The classic Explorer menu has been verified on a clean Windows 10 22H2 VM, and the modern menu has been exercised on a Windows 11 development machine. Windows 11 clean-machine installation and **Show more options** integration, full UI coverage, and Office layout fidelity still need validation.
 
 Standalone Office document and spreadsheet format conversion is planned for a later stage. PDF export is available with the platform's Office backend.
 

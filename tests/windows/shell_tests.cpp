@@ -10,6 +10,7 @@
 namespace {
 void expect(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 const CLSID commandClsid={0xa836fb4f,0x6548,0x4fc3,{0x8d,0x67,0x50,0x26,0x7b,0x25,0xa4,0x18}};
+const CLSID classicClsid={0xee9d6c0b,0x0a19,0x4f8c,{0x8e,0x61,0xc7,0x8d,0xd8,0x81,0x6d,0xb0}};
 ca::ComPtr<IShellItemArray> selection(ca::fs::path const& root,std::initializer_list<const wchar_t*> names){
     struct Ids {std::vector<PIDLIST_ABSOLUTE> values;~Ids(){for(auto id:values)CoTaskMemFree(id);}} ids;
     for(auto name:names){auto path=root/name;std::ofstream(path)<<"disposable shell selection";PIDLIST_ABSOLUTE id{};ca::check(SHParseDisplayName(path.c_str(),nullptr,&id,0,nullptr));ids.values.push_back(id);}
@@ -33,10 +34,10 @@ int receiveLaunch(int argc, wchar_t** argv) {
     }
 }
 
-void expectLaunch(IExplorerCommand* command, IShellItemArray* items, const ca::fs::path& receipt,
+void expectLaunch(auto invoke, const ca::fs::path& receipt,
                   ca::Action action, const std::vector<ca::fs::path>& files) {
     ca::fs::remove(receipt);
-    ca::check(command->Invoke(items, nullptr));
+    ca::check(invoke());
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (!ca::fs::exists(receipt) && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -108,13 +109,33 @@ int wmain(int argc,wchar_t** argv){
             auto image=selection(root,{L"picture.png"});expect(commands.at(A::h264)->Invoke(image.Get(),nullptr)==E_INVALIDARG,"Unsupported invocation rejected");
             auto files = selection(root, {L"кино & 100% !.mp4", L"second.mov"});
             const std::vector<ca::fs::path> selected{root / L"кино & 100% !.mp4", root / L"second.mov"};
-            expectLaunch(commands.at(A::more).Get(), files.Get(), root / L"state/chooser.caj", A::more, selected);
-            expectLaunch(commands.at(A::h264).Get(), files.Get(), root / L"state/direct.caj", A::h264, selected);
+            expectLaunch([&] { return commands.at(A::more)->Invoke(files.Get(), nullptr); }, root / L"state/chooser.caj", A::more, selected);
+            expectLaunch([&] { return commands.at(A::h264)->Invoke(files.Get(), nullptr); }, root / L"state/direct.caj", A::h264, selected);
             expect(ca::fs::is_empty(root / L"state/jobs"), "GUI launches consume their private shell jobs");
             ca::setOfficeCapability(false,ca::Capability::unavailable);auto doc=selection(root,{L"document.docx"});ca::check(commands.at(A::word)->GetState(doc.Get(),FALSE,&state));expect(state==ECS_DISABLED,"Unavailable Office disabled");
         }
+        {
+            ca::ComPtr<IClassFactory> factory;
+            ca::check(factoryFn(classicClsid, IID_PPV_ARGS(&factory)));
+            ca::ComPtr<IExecuteCommand> command;
+            ca::check(factory->CreateInstance(nullptr, IID_PPV_ARGS(&command)));
+            expect(command->Execute() == E_INVALIDARG, "Windows 10 verb requires a selection");
+            ca::ComPtr<IObjectWithSelection> withSelection;
+            ca::check(command.As(&withSelection));
+            auto files = selection(root, {L"кино & 100% !.mp4", L"picture.png"});
+            ca::check(withSelection->SetSelection(files.Get()));
+            ca::ComPtr<IShellItemArray> actual;
+            ca::check(withSelection->GetSelection(IID_PPV_ARGS(&actual)));
+            expect(actual.Get() == files.Get(), "DelegateExecute retains the selection");
+            ca::check(command->SetNoShowUI(TRUE));
+            expect(command->Execute() == HRESULT_FROM_WIN32(ERROR_CANCELLED), "Windows 10 verb respects UI suppression");
+            ca::check(command->SetNoShowUI(FALSE));
+            expectLaunch([&] { return command->Execute(); }, root / L"state/chooser.caj", ca::Action::more,
+                         {root / L"кино & 100% !.mp4", root / L"picture.png"});
+            expect(ca::fs::is_empty(root / L"state/jobs"), "Windows 10 chooser consumes its private shell job");
+        }
         expect(unloadFn()==S_OK,"All COM references released");
-        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, selection filtering, Office availability, and chooser/direct launch handoffs.\n";result=0;
+        std::cout<<"PASS: actual shell DLL, COM lifetime/enumeration, selection filtering, Office availability, and modern/classic launch handoffs.\n";result=0;
     }catch(std::exception const& e){std::cerr<<e.what()<<'\n';}
     if(SUCCEEDED(apartment))CoUninitialize();return result;
 }

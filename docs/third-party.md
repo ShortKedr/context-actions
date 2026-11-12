@@ -8,7 +8,7 @@
 | FFmpeg Gyan full x64 | 9.0.2; ffmpeg.exe и ffprobe.exe; декодер AV1 libdav1d, программные libx264/libx265/libwebp и транзитивные библиотеки статической сборки | Видео и изображения; GPLv3-сборка, LICENSE/README из архива сохраняются в licenses/ffmpeg при установке |
 | qpdf MinGW x64 | 12.4.2; qpdf.exe, qpdf30.dll, libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll | PDF-проверки и объединение; Apache-2.0 и отдельные лицензии транзитивных runtime; каталог share сохраняется в licenses/qpdf при установке |
 | libarchive, zlib и liblzma | libarchive 3.8.11, zlib 1.4, liblzma из XZ Utils 5.8.4 | Отдельный исполняемый файл ContextActionsArchive со статически связанными библиотеками для перепаковки. Libarchive распространяется преимущественно по BSD-2-Clause и включает отдельные компоненты BSD-3-Clause, 0BSD, CC0-1.0, ISC и PostgreSQL (Windows). У zlib лицензия Zlib, у liblzma — 0BSD. |
-| Windows API | Системные компоненты Windows 11 | Нативные элементы и COM. Размеры JPEG читает общий движок через ffprobe |
+| Windows API | Системные компоненты Windows 10 22H2 и Windows 11 | Нативные элементы и COM. Размеры JPEG читает общий движок через ffprobe |
 | Inno Setup | 6.4.3, переносимый NuGet Tools.InnoSetup | Только инструмент сборки, не runtime продукта. Зафиксированная лицензия в архиве разрешает в том числе коммерческое использование. [Исходный релиз](https://github.com/jrsoftware/issrc/releases/tag/is-6_4_3) |
 | Windows SDK MakeAppx | 10.0.22621.0 | Только упаковка sparse identity, не установка |
 
