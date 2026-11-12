@@ -17,6 +17,7 @@ REPOSITORY = "ShortKedr/context-actions"
 
 FILES = {
     WEB / "site.css": "site.css",
+    WEB / "site.js": "site.js",
     WEB / "theme.js": "theme.js",
     WEB / "demo-poster.jpg": "assets/demo-poster.jpg",
     ROOT / "resources" / "logo-150.png": "assets/context-actions.png",
@@ -74,7 +75,10 @@ def platform_card(platform, description, installer, archive, urls):
     archive_link = ""
     if primary != archive[0] and archive[0] in urls:
         archive_link = link(urls[archive[0]], archive[1], aria_label=f"{archive[1]} for {platform}")
-    return f'<article class="download-card"><h3>{platform}</h3><p>{description}</p>{button}{archive_link}</article>'
+    return (
+        f'<article class="download-card" data-reveal><h3>{platform}</h3><p>{description}</p>'
+        f'<div class="download-actions">{button}{archive_link}</div></article>'
+    )
 
 
 def linux_card(version, urls):
@@ -96,8 +100,8 @@ def linux_card(version, urls):
 
     helper = link(installer, "Reinstall or downgrade (.sh)") if installer else ""
     return (
-        '<article class="download-card"><h3>Linux</h3><p>Packages by distribution and architecture</p>'
-        '<details><summary class="button button-primary">Download for Linux <span aria-hidden="true">↓</span></summary>'
+        '<article class="download-card" data-reveal><h3>Linux</h3><p>Packages by distribution and architecture</p>'
+        '<details class="download-actions"><summary class="button button-primary">Download for Linux <span aria-hidden="true">↓</span></summary>'
         f'<ul class="package-list">{"".join(packages)}</ul>{helper}</details></article>'
     )
 
