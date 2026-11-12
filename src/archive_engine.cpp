@@ -3,6 +3,7 @@
 #include <zlib.h>
 
 #include <array>
+#include <cerrno>
 #include <clocale>
 #include <cstdio>
 #include <cstdlib>
@@ -12,14 +13,32 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 
 namespace {
 namespace fs = std::filesystem;
+constexpr std::uint64_t gibibyte = 1024ULL * 1024 * 1024;
+constexpr std::uint64_t maxExpandedBytes = 8 * gibibyte;
+constexpr std::uint64_t maxContainerBytes = 9 * gibibyte;
+constexpr std::size_t maxEntries = 100000;
 using Reader = std::unique_ptr<archive, decltype(&archive_read_free)>;
 using Entry = std::unique_ptr<archive_entry, decltype(&archive_entry_free)>;
 struct CloseFile {
     void operator()(std::FILE* file) const { std::fclose(file); }
 };
+using File = std::unique_ptr<std::FILE, CloseFile>;
+
+#ifndef _WIN32
+void lowerResourceLimit(int resource, rlim_t limit) {
+    rlimit limits{};
+    if (getrlimit(resource, &limits) != 0) throw std::runtime_error("Cannot read archive process resource limit");
+    if (limits.rlim_cur != RLIM_INFINITY && limits.rlim_cur <= limit) return;
+    limits.rlim_cur = limit;
+    if (setrlimit(resource, &limits) != 0) throw std::runtime_error("Cannot set archive process resource limit");
+}
+#endif
 
 void check(int status, archive* handle) {
     if (status == ARCHIVE_OK) return;
@@ -30,6 +49,7 @@ void check(int status, archive* handle) {
 struct GzipInput {
     gzFile file;
     std::array<char, 64 * 1024> buffer{};
+    std::uint64_t remaining = maxContainerBytes;
 
     explicit GzipInput(const fs::path& path)
 #ifdef _WIN32
@@ -47,9 +67,46 @@ struct GzipInput {
         *contents = input.buffer.data();
         int error = Z_OK;
         const char* message = gzerror(input.file, &error);
-        if (count >= 0 && error == Z_OK) return count;
+        if (count >= 0 && error == Z_OK) {
+            const auto bytes = static_cast<std::uint64_t>(count);
+            if (bytes > input.remaining) {
+                archive_set_error(handle, EFBIG, "Expanded gzip stream exceeds the 9 GiB limit");
+                return ARCHIVE_FATAL;
+            }
+            input.remaining -= bytes;
+            return count;
+        }
         archive_set_error(handle, error, "Invalid gzip data: %s", message ? message : "read failed");
         return ARCHIVE_FATAL;
+    }
+};
+
+struct ArchiveOutput {
+    File file;
+    std::uint64_t remaining = maxContainerBytes;
+
+    explicit ArchiveOutput(const fs::path& path) {
+#ifdef _WIN32
+        std::FILE* opened = nullptr;
+        if (_wfopen_s(&opened, path.c_str(), L"wb") == 0) file.reset(opened);
+#else
+        file.reset(std::fopen(path.c_str(), "wb"));
+#endif
+        if (!file) throw std::runtime_error("Cannot open output archive");
+    }
+
+    static la_ssize_t write(archive* handle, void* data, const void* contents, size_t size) {
+        auto& output = *static_cast<ArchiveOutput*>(data);
+        if (size > output.remaining) {
+            archive_set_error(handle, EFBIG, "Archive output exceeds the 9 GiB limit");
+            return -1;
+        }
+        if (std::fwrite(contents, 1, size, output.file.get()) != size) {
+            archive_set_error(handle, errno, "Cannot write output archive");
+            return -1;
+        }
+        output.remaining -= size;
+        return static_cast<la_ssize_t>(size);
     }
 };
 
@@ -129,16 +186,20 @@ std::string entryPath(archive_entry* entry, bool directory) {
     return result;
 }
 
-void copyEntry(archive* reader, archive* writer, archive_entry* source) {
+void copyEntry(archive* reader, archive* writer, archive_entry* source, std::uint64_t& expandedRemaining) {
     if (archive_entry_is_encrypted(source)) throw std::runtime_error("Encrypted archives are unsupported");
     const auto type = archive_entry_filetype(source);
     if ((type != AE_IFREG && type != AE_IFDIR) || archive_entry_hardlink(source) || archive_entry_symlink(source))
         throw std::runtime_error("Archive links and special files are unsupported");
     const auto name = entryPath(source, type == AE_IFDIR);
-    if (name.empty()) return; // Ignore the optional root directory marker.
     const auto size = archive_entry_size(source);
     if (size < 0 || (type == AE_IFREG && !archive_entry_size_is_set(source)) || (type == AE_IFDIR && size != 0))
         throw std::runtime_error("Unknown archive entry size");
+    if (name.empty()) return; // Ignore the optional root directory marker after checking its size.
+    const auto entryBytes = static_cast<std::uint64_t>(size);
+    if (entryBytes > expandedRemaining) throw std::runtime_error("Archive contents exceed the 8 GiB expanded size limit");
+    // The per-entry copy below refuses bytes beyond this reservation.
+    expandedRemaining -= entryBytes;
 
     Entry entry(archive_entry_new(), archive_entry_free);
     if (!entry) throw std::bad_alloc();
@@ -172,7 +233,8 @@ void copyEntry(archive* reader, archive* writer, archive_entry* source) {
 
 void repack(const fs::path& from, const fs::path& to, const fs::path& source, const fs::path& destination) {
     std::unique_ptr<GzipInput> gzip;
-    std::unique_ptr<std::FILE, CloseFile> rar;
+    File rar;
+    std::unique_ptr<ArchiveOutput> output;
     Reader reader(archive_read_new(), archive_read_free);
     const auto freeWriter = [](archive* handle) {
         // The successful path closes explicitly. On failure, skip finalizing the partial archive.
@@ -223,17 +285,18 @@ void repack(const fs::path& from, const fs::path& to, const fs::path& source, co
         check(archive_write_add_filter_gzip(writer.get()), writer.get());
     } else if (to == "7z") check(archive_write_set_format_7zip(writer.get()), writer.get());
     else throw std::runtime_error("Unsupported output archive format");
-#ifdef _WIN32
-    check(archive_write_open_filename_w(writer.get(), destination.c_str()), writer.get());
-#else
-    check(archive_write_open_filename(writer.get(), destination.c_str()), writer.get());
-#endif
+    check(archive_write_set_bytes_in_last_block(writer.get(), 1), writer.get());
+    output = std::make_unique<ArchiveOutput>(destination);
+    check(archive_write_open2(writer.get(), output.get(), nullptr, ArchiveOutput::write, nullptr, nullptr), writer.get());
 
+    std::size_t entries = 0;
+    auto expandedRemaining = maxExpandedBytes;
     for (archive_entry* entry = nullptr;;) {
         const auto status = archive_read_next_header(reader.get(), &entry);
         if (status == ARCHIVE_EOF) break;
         check(status, reader.get());
-        copyEntry(reader.get(), writer.get(), entry);
+        if (++entries > maxEntries) throw std::runtime_error("Archive exceeds the 100,000 entry limit");
+        copyEntry(reader.get(), writer.get(), entry, expandedRemaining);
     }
     if (gzip) {
         // The tar reader can stop at its end marker before zlib has read the gzip trailer.
@@ -244,6 +307,7 @@ void repack(const fs::path& from, const fs::path& to, const fs::path& source, co
     }
     check(archive_read_close(reader.get()), reader.get());
     check(archive_write_close(writer.get()), writer.get());
+    if (std::fclose(output->file.release()) != 0) throw std::runtime_error("Cannot close output archive");
 }
 }
 
@@ -257,6 +321,14 @@ int main(int argc, char** argv) {
 #endif
     if (argc != 5) return 2;
     try {
+#ifndef _WIN32
+        // Also bound temporary files written directly by the 7z encoder.
+        lowerResourceLimit(RLIMIT_FSIZE, maxContainerBytes);
+#endif
+#ifdef __linux__
+        // The archive reader may allocate decoder state before returning any entries.
+        lowerResourceLimit(RLIMIT_AS, gibibyte);
+#endif
         repack(argv[1], argv[2], argv[3], argv[4]);
         return 0;
     } catch (const std::exception& error) {

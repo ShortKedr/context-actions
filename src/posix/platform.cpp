@@ -1,5 +1,6 @@
 #include "platform.h"
 
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <codecvt>
@@ -24,7 +25,9 @@
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <crt_externs.h>
+#include <libproc.h>
 #include <mach-o/dyld.h>
+#include <sys/resource.h>
 #else
 #include <linux/fs.h>
 #include <sys/syscall.h>
@@ -187,6 +190,30 @@ fs::path dataDirectory() {
 #endif
 }
 
+fs::path conversionScratchRoot() {
+#ifdef __APPLE__
+    // Darwin assigns this directory to the current user outside shared output trees.
+    const auto length = confstr(_CS_DARWIN_USER_TEMP_DIR, nullptr, 0);
+    if (!length) throw std::runtime_error("The user temporary directory is unavailable.");
+    std::string path(length, '\0');
+    if (confstr(_CS_DARWIN_USER_TEMP_DIR, path.data(), path.size()) != length)
+        throw std::runtime_error("The user temporary directory is unavailable.");
+    path.pop_back();
+    return fs::canonical(path);
+#else
+    const auto home = fs::canonical(homeDirectory());
+    for (auto path = home; ; path = path.parent_path()) {
+        struct stat info{};
+        require(stat(path.c_str(), &info) == -1 ? errno : 0, "Inspect scratch directory ancestry");
+        if (!S_ISDIR(info.st_mode) || (info.st_uid != 0 && info.st_uid != geteuid()) ||
+            ((info.st_mode & 0022) && !(info.st_mode & S_ISVTX)))
+            throw std::runtime_error("The user scratch directory is in an untrusted location.");
+        if (path == path.root_path()) break;
+    }
+    return home;
+#endif
+}
+
 void createPrivateDirectory(const fs::path& path) {
     if (mkdir(path.c_str(), 0700) == -1)
         throw fs::filesystem_error("Create private directory", path, std::error_code(errno, std::generic_category()));
@@ -294,6 +321,28 @@ void moveFile(const fs::path& from, const fs::path& to, bool replace) {
     throw fs::filesystem_error("Move file", from, to, std::error_code(error, std::generic_category()));
 }
 
+void publishFile(const fs::path& from, const fs::path& to) {
+    try {
+        moveFile(from, to);
+        return;
+    } catch (const fs::filesystem_error& error) {
+        if (error.code().value() != EXDEV) throw;
+    }
+
+    // Across filesystems, exclusive creation pins the destination even in a shared directory.
+    std::ifstream input(from, std::ios::binary);
+    if (!input) throw std::runtime_error("Cannot open the completed output.");
+    auto output = openNewPrivateFile(to);
+    std::array<char, 64 * 1024> buffer;
+    while (input.read(buffer.data(), buffer.size()) || input.gcount()) {
+        const auto count = static_cast<size_t>(input.gcount());
+        if (std::fwrite(buffer.data(), 1, count, output.get()) != count)
+            throw std::runtime_error("Cannot copy the completed output.");
+    }
+    if (input.bad() || !input.eof() || std::fclose(output.release()) != 0)
+        throw std::runtime_error("Cannot finish copying the completed output.");
+}
+
 void withRenameLock(const fs::path& file, const std::function<void()>& operation) {
     const Descriptor lock{open(file.c_str(), O_CREAT | O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600)};
     require(lock.value == -1 ? errno : 0, "Open rename lock");
@@ -311,7 +360,7 @@ void withRenameLock(const fs::path& file, const std::function<void()>& operation
 
 ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstring>& arguments,
                          std::atomic_bool& cancel, const std::function<void(const std::string&)>& onOutput,
-                         uint32_t timeoutMs) {
+                         uint32_t timeoutMs, [[maybe_unused]] size_t processMemoryLimit) {
     if (cancel) throw Cancelled();
     std::vector<std::string> command{executable.native()};
     for (const auto& argument : arguments) command.push_back(utf8(argument));
@@ -370,6 +419,18 @@ ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstr
         if (cancel) throw Cancelled();
         if (timeoutMs != UINT32_MAX && steady_clock::now() >= deadline)
             throw std::runtime_error("Operation timed out.");
+#ifdef __APPLE__
+        if (processMemoryLimit) {
+            // Older supported macOS versions do not enforce an address-space rlimit.
+            rusage_info_v0 usage{};
+            if (proc_pid_rusage(child.id, RUSAGE_INFO_V0, reinterpret_cast<rusage_info_t*>(&usage)) == 0) {
+                if (usage.ri_phys_footprint > processMemoryLimit)
+                    throw std::runtime_error("Operation exceeded its memory budget.");
+            } else if (errno != ESRCH && errno != EINTR) {
+                require(errno, "Measure process memory");
+            }
+        }
+#endif
         drain();
         const auto exited = waitpid(child.id, &status, WNOHANG);
         if (exited == child.id) {

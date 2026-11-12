@@ -128,7 +128,7 @@ cpack --config build/linux/CPackConfig.cmake -B dist/linux -G 'TGZ;DEB;RPM'
 
 Собранное приложение находится в `build/linux/src/linux/context-actions`. Установка из сборки через `cmake --install build/linux --prefix "$HOME/.local"` копирует бинарник, значок, ярлык и файлы интеграции GNOME Files и Dolphin. Для запуска из меню каталог `$HOME/.local/bin` должен быть в `PATH` графического сеанса.
 
-Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB, RPM или пакет Arch Linux. При наличии Zenity и PolicyKit запустите `bash ContextActions-linux-installer.sh`, выберите скачанный пакет и отметьте **Allow reinstall or downgrade**. Установщик запросит подтверждение через PolicyKit. Для локальной сборки используйте `bash packaging/linux/ContextActions-linux-installer.sh`.
+Для переустановки или отката скачайте `ContextActions-linux-installer.sh` и нужный DEB, RPM или пакет Arch Linux из GitHub Releases. При наличии Zenity, PolicyKit и curl запустите `bash ContextActions-linux-installer.sh`, выберите пакет с исходным именем (до 512 МиБ) и отметьте **Allow reinstall or downgrade**. Установщик скачает контрольные суммы выпуска с GitHub и проверит пакет перед запросом PolicyKit и перед установкой. Для локальной сборки используйте пакетный менеджер дистрибутива.
 
 ## GitHub Actions
 

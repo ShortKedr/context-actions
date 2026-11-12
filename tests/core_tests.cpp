@@ -1,4 +1,4 @@
-#include "core.h"
+#include "platform.h"
 #ifdef _WIN32
 #include "windows/platform_win.h"
 #include <shellapi.h>
@@ -61,6 +61,13 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         auto external=scratch/L"external.caj";ca::saveOptions(options,external);ca::consumeJob(external);expect(ca::fs::exists(external),"External job retained");
         auto corrupt=scratch/L"corrupt.caj";write(corrupt,"CAJ1\xFF\xFF\xFF\xFF");rejects([&]{ca::readJob(corrupt);});
         auto args=ca::videoArguments(options,L"input",L"output");expect(std::find(args.begin(),args.end(),L"libx265")!=args.end(),"Software HEVC encoder");
+        const auto formatLimit = std::find(args.begin(), args.end(), L"-format_whitelist");
+        const auto protocolLimit = std::find(args.begin(), args.end(), L"-protocol_whitelist");
+        const auto input = std::find(args.begin(), args.end(), L"-i");
+        expect(input != args.end() && formatLimit < input && protocolLimit < input && *(protocolLimit + 1) == L"file" &&
+               (L"," + *(formatLimit + 1) + L",").find(L",concat,") == std::wstring::npos &&
+               (L"," + *(formatLimit + 1) + L",").find(L",hls,") == std::wstring::npos,
+               "Media inputs restrict protocols and manifest demuxers before opening the file");
         options.action=ca::Action::telegram;args=ca::videoArguments(options,L"input",L"output");expect(std::find(args.begin(),args.end(),L"-an")!=args.end(),"Silent Telegram animation");expect(std::find(args.begin(),args.end(),L"libx264")!=args.end(),"Telegram H264");
         options.targetMB=2;rejects([&]{ca::videoArguments(options,L"in",L"out",0);});args=ca::videoArguments(options,L"in",L"out",10);expect(std::find(args.begin(),args.end(),L"-crf")==args.end(),"Size mode is bitrate based");
         write(scratch/L"source.txt","original");write(scratch/L"target.txt","existing");rejects([&]{ca::commitOutput(scratch/L"source.txt",scratch/L"target.txt");});expect(ca::fs::file_size(scratch/L"target.txt")==8,"No overwrite");
@@ -105,7 +112,9 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         bool checkedScratch = false;
         const auto imageResult = ca::execute(image, cancel, [&](const ca::Update&) {
             if (checkedScratch) return;
-            for (const auto& item : ca::fs::directory_iterator(scratch)) {
+            expect(ca::fs::canonical(ca::conversionScratchRoot()) != ca::fs::canonical(scratch),
+                   "Conversions do not stage under the output directory");
+            for (const auto& item : ca::fs::directory_iterator(ca::conversionScratchRoot())) {
                 if (item.path().filename().native().starts_with(".context-actions-")) {
                     expect(isPrivate(item.path()), "POSIX conversion scratch directory is private");
                     checkedScratch = true;
@@ -134,6 +143,9 @@ int runTests(const ca::fs::path& self, const ca::fs::path& root) {
         expect(echo.code==0 && echo.output=="Unicode \xc3\xa9 & % ! $ ` (test) \"", "Child argument stays literal");
         rejects([&]{ca::runProcess(self,{L"--child"},cancel,{},30);});
         expect(!cancel,"Process timeout keeps the cancellation flag unchanged");
+#ifdef __APPLE__
+        rejects([&]{ca::runProcess(self,{L"--child"},cancel,{},10000,1);});
+#endif
         ca::CommandLine command;
         ca::parseArguments({L"--action",L"rename",L"--pattern",L"{name}_{n}",L"--",L"--literal"},command);
         expect(command.options.action==ca::Action::rename && command.options.files[0].filename()=="--literal","CLI supports option-like filenames");

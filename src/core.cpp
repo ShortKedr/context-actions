@@ -62,8 +62,17 @@ std::wstring readString(std::istream& stream) {
 void engineSuccess(const ProcessResult& process) {
     if (process.code != 0) fail(tr("failed") + L": " + wide(process.output));
 }
+void appendMediaInput(std::vector<std::wstring>& args, const fs::path& input) {
+    // Only self-contained formats from the supported media matrix may be probed.
+    args.insert(args.end(), {L"-protocol_whitelist", L"file", L"-format_whitelist",
+        L"mov,mp4,m4a,matroska,webm,avi,asf,mpegts,mp3,aac,loas,wav,flac,ogg,aiff,"
+        L"jpeg_pipe,png_pipe,apng,webp_pipe,bmp_pipe,tiff_pipe,gif,gif_pipe",
+        L"-i", pathText(input)});
+}
 double probeDuration(const fs::path& input, std::atomic_bool& cancel) {
-    auto result = runProcess(engine("ffprobe"), {L"-v",L"error",L"-show_entries",L"format=duration",L"-of",L"default=noprint_wrappers=1:nokey=1",pathText(input)}, cancel, {}, 60000);
+    std::vector<std::wstring> args{L"-v",L"error",L"-show_entries",L"format=duration",L"-of",L"default=noprint_wrappers=1:nokey=1"};
+    appendMediaInput(args, input);
+    auto result = runProcess(engine("ffprobe"), args, cancel, {}, 60000);
     engineSuccess(result);
     std::istringstream stream(result.output);
     stream.imbue(std::locale::classic());
@@ -71,7 +80,8 @@ double probeDuration(const fs::path& input, std::atomic_bool& cancel) {
     return (stream >> duration) && std::isfinite(duration) && duration > 0 ? duration : 0;
 }
 void imageConversion(const Options& options, const fs::path& source, const fs::path& output, std::atomic_bool& cancel) {
-    std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",L"-i",pathText(source)};
+    std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n"};
+    appendMediaInput(args, source);
     if (options.action == Action::frame) args.insert(args.end(), {L"-map",L"0:V:0"});
     auto filter = options.action != Action::frame && options.width
         ? L"scale=w='min(iw," + std::to_wstring(options.width) + L")':h=-1:flags=lanczos" : L"null";
@@ -85,7 +95,10 @@ void imageConversion(const Options& options, const fs::path& source, const fs::p
     if (ext == L".jpg" || ext == L".jpeg") args.insert(args.end(), {L"-q:v",std::to_wstring(2+options.quality/4)});
     args.push_back(pathText(output));
     engineSuccess(runProcess(engine("ffmpeg"), args, cancel));
-    engineSuccess(runProcess(engine("ffmpeg"), {L"-v",L"error",L"-nostdin",L"-i",pathText(output),L"-frames:v",L"1",L"-f",L"null",L"-"}, cancel, {}, 60000));
+    std::vector<std::wstring> verification{L"-v",L"error",L"-nostdin"};
+    appendMediaInput(verification, output);
+    verification.insert(verification.end(), {L"-frames:v",L"1",L"-f",L"null",L"-"});
+    engineSuccess(runProcess(engine("ffmpeg"), verification, cancel, {}, 60000));
 }
 
 std::vector<std::wstring> audioOutputArguments(const std::wstring& format) {
@@ -100,14 +113,16 @@ void mediaReport(const fs::path& source, const fs::path& output, std::atomic_boo
     std::ofstream report(output, std::ios::binary);
     report << utf8(tr("media-info") + L"\n" + pathText(source.filename()) + L"\n\n");
     if (!report) fail(tr("failed"));
-    const auto probe = runProcess(engine("ffprobe"), {
+    std::vector<std::wstring> args{
         L"-v",L"error",L"-pretty",L"-show_entries",
         L"format=format_name,format_long_name,duration,size,bit_rate:"
         L"stream=index,codec_type,codec_name,profile,width,height,avg_frame_rate,pix_fmt,"
         L"color_space,color_transfer,color_primaries,sample_rate,channels,channel_layout:"
-        L"stream_tags=language:chapter=start_time,end_time",
-        pathText(source)
-    }, cancel, [&](const std::string& chunk) { report << chunk; }, 60000);
+        L"stream_tags=language:chapter=start_time,end_time"
+    };
+    appendMediaInput(args, source);
+    const auto probe = runProcess(engine("ffprobe"), args, cancel,
+        [&](const std::string& chunk) { report << chunk; }, 60000);
     engineSuccess(probe);
     if (probe.output.empty()) fail(tr("failed"));
     report.close();
@@ -261,7 +276,9 @@ void consumeJob(const fs::path& path) {
 std::vector<std::wstring> videoArguments(const Options& o, const fs::path& input, const fs::path& output, double duration, int attempt) {
     bool hevc=o.action==Action::h265, telegram=o.action==Action::telegram;
     // FFmpeg detects the input stream's codec and selects its default decoder.
-    std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",L"-progress",L"pipe:1",L"-i",pathText(input),L"-map",L"0:v:0"};
+    std::vector<std::wstring> args{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",L"-progress",L"pipe:1"};
+    appendMediaInput(args, input);
+    args.insert(args.end(), {L"-map",L"0:v:0"});
     if (o.mute||telegram) args.push_back(L"-an"); else args.insert(args.end(),{L"-map",L"0:a:0?",L"-c:a",L"aac",L"-b:a",L"128k"});
     args.insert(args.end(),{L"-c:v",hevc?L"libx265":L"libx264",L"-preset",L"medium",L"-pix_fmt",L"yuv420p"});
     if(hevc) args.insert(args.end(),{L"-tag:v",L"hvc1"});
@@ -286,8 +303,8 @@ fs::path uniqueOutput(const fs::path& directory, const std::wstring& stem, const
     return candidate;
 }
 void commitOutput(const fs::path& temp, const fs::path& destination) {
-    if(!fs::is_regular_file(temp) || fs::file_size(temp)==0) fail(tr("failed"));
-    try { moveFile(temp, destination); }
+    if(!fs::is_regular_file(fs::symlink_status(temp)) || fs::file_size(temp)==0) fail(tr("failed"));
+    try { publishFile(temp, destination); }
     catch (const std::exception& error) { fail(tr("conflict") + pathText(destination) + L"\n" + wide(error.what())); }
 }
 std::vector<Rename> previewRename(const Options& o) {
@@ -412,7 +429,7 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
             const auto source=fs::absolute(o.files[i]);
             if(!fs::is_regular_file(source))fail(tr("missing")+pathText(source));
             const auto directory=o.output.empty()?source.parent_path():fs::absolute(o.output); fs::create_directories(directory);
-            Temporary scratch(directory);
+            Temporary scratch(conversionScratchRoot());
             const auto stem = o.action == Action::repack ? archiveStem(source) : pathText(source.stem())+L"_"+actionId(o.action);
             auto output=uniqueOutput(directory,stem,extension);
             auto temporary=scratch.path/textPath(L"result"+extension);
@@ -425,10 +442,12 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                         auto jpg=scratch.path/(std::to_string(p)+".jpg"); auto pdf=scratch.path/(std::to_string(p)+".pdf");
                         Options imageOptions=o;imageOptions.width=0;imageOptions.quality=4;
                         imageConversion(imageOptions,file,jpg,cancel);
-                        const auto dimensions = runProcess(engine("ffprobe"), {
+                        std::vector<std::wstring> args{
                             L"-v", L"error", L"-select_streams", L"v:0", L"-show_entries",
-                            L"stream=width,height", L"-of", L"csv=p=0", pathText(jpg)
-                        }, cancel, {}, 60000);
+                            L"stream=width,height", L"-of", L"csv=p=0"
+                        };
+                        appendMediaInput(args, jpg);
+                        const auto dimensions = runProcess(engine("ffprobe"), args, cancel, {}, 60000);
                         engineSuccess(dimensions);
                         int width = 0, height = 0;
                         char separator = 0;
@@ -461,7 +480,7 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                 const auto helper = appDirectory() / "ContextActionsArchive";
 #endif
                 engineSuccess(runProcess(helper, {archiveFormat(source), extension.substr(1),
-                    pathText(source), pathText(temporary)}, cancel));
+                    pathText(source), pathText(temporary)}, cancel, {}, 30 * 60 * 1000, 1024ull * 1024 * 1024));
             } else if(o.action==Action::image||o.action==Action::frame) imageConversion(o,source,temporary,cancel);
             else if(o.action==Action::mediaInfo) mediaReport(source,temporary,cancel);
             else if(o.action==Action::word||o.action==Action::excel) exportOfficePdf(source,temporary,o.action==Action::excel,cancel);
@@ -479,7 +498,8 @@ Result execute(const Options& o, std::atomic_bool& cancel, const Progress& notif
                 };
                 if (o.action == Action::audio || o.action == Action::remux) {
                     std::vector<std::wstring> arguments{L"-hide_banner",L"-loglevel",L"error",L"-nostdin",L"-n",
-                        L"-xerror",L"-progress",L"pipe:1",L"-i",pathText(source)};
+                        L"-xerror",L"-progress",L"pipe:1"};
+                    appendMediaInput(arguments, source);
                     if (o.action == Action::audio) {
                         arguments.insert(arguments.end(), {L"-map",L"0:a:0"});
                         const auto encoding = audioOutputArguments(outputFormat(o));

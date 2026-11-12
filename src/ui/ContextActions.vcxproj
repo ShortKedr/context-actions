@@ -62,7 +62,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>$(MSBuildThisFileDirectory)..\..\build\Release\actions_core.lib;ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;uuid.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(MSBuildThisFileDirectory)..\..\build\Release\actions_core.lib;advapi32.lib;ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;uuid.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>libucrt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <AdditionalOptions>/defaultlib:ucrt.lib /PDBALTPATH:ContextActions.pdb %(AdditionalOptions)</AdditionalOptions>
     </Link>

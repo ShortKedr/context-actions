@@ -65,7 +65,8 @@ void consumeJob(const fs::path& path);
 void saveOptions(const Options& options, const fs::path& path);
 std::vector<std::wstring> videoArguments(const Options& options, const fs::path& input, const fs::path& output, double duration = 0, int attempt = 0);
 ProcessResult runProcess(const fs::path& executable, const std::vector<std::wstring>& arguments,
-    std::atomic_bool& cancel, const std::function<void(const std::string&)>& onOutput = {}, uint32_t timeoutMs = UINT32_MAX);
+    std::atomic_bool& cancel, const std::function<void(const std::string&)>& onOutput = {},
+    uint32_t timeoutMs = UINT32_MAX, size_t processMemoryLimit = 0);
 std::vector<Rename> previewRename(const Options& options);
 void applyRename(const std::vector<Rename>& changes, std::atomic_bool& cancel, bool saveUndo = true);
 void undoRename(std::atomic_bool& cancel);

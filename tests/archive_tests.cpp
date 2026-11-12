@@ -1,4 +1,4 @@
-#include "core.h"
+#include "platform.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <algorithm>
@@ -12,6 +12,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <set>
 #include <string_view>
 #include <thread>
 #ifdef _WIN32
@@ -170,12 +171,13 @@ void rejects(const ca::Options& options, const char* condition) {
     throw std::runtime_error(std::string(condition) + " should be rejected by validation");
 }
 
-void failedRepack(const fs::path& input, const fs::path& output, std::wstring format, const std::string& condition) {
+void failedRepack(const fs::path& input, const fs::path& output, std::wstring format, const std::string& condition,
+                  std::wstring_view diagnostic = L"") {
     const auto original = read(input);
     std::atomic_bool cancel = false;
     bool failureReported = false;
     const auto result = ca::execute(job({input}, output, std::move(format)), cancel, [&](const ca::Update& update) {
-        failureReported |= update.failed && !update.status.empty();
+        failureReported |= update.failed && !update.status.empty() && update.status.find(diagnostic) != std::wstring::npos;
     });
     expect(result.failed == 1 && result.succeeded == 0 && !result.cancelled && result.outputs.empty() &&
            failureReported, condition + " must produce a reported failure");
@@ -381,6 +383,13 @@ void runTests(const fs::path& root, const fs::path& fixtures) {
     makeArchive(symlink, L"tar", {{"outside", {EntryType::symlink, "../outside"}}});
     rejectArchive(symlink, "Symbolic link entry");
 
+    const auto tooMany = inputDirectory / "too-many-entries.tar";
+    Entries emptyFiles;
+    for (int i = 0; i <= 100000; ++i)
+        emptyFiles.emplace(std::to_string(i) + ".txt", Entry{EntryType::file, {}});
+    makeArchive(tooMany, L"tar", emptyFiles);
+    failedRepack(tooMany, failureDirectory, L"tar.gz", "Archive entry quota", L"100,000 entry limit");
+
     const auto partialBatch = ca::execute(job({broken, zip}, failureDirectory, L"tar.gz"), cancel, {});
     expect(partialBatch.succeeded == 1 && partialBatch.failed == 1 && partialBatch.outputs.size() == 1,
            "An unreadable archive does not stop a later archive in a batch");
@@ -424,14 +433,23 @@ void runTests(const fs::path& root, const fs::path& fixtures) {
         byte = static_cast<char>(state & 0xff);
     }
     makeArchive(slowZip, L"zip", {{"data.bin", {EntryType::file, std::move(randomData)}}});
+    const auto scratchRoot = ca::conversionScratchRoot();
+    const auto scratchPrefix = fs::path(".context-actions-").native();
+    std::set<fs::path> existingScratch;
+    for (const auto& item : fs::directory_iterator(scratchRoot))
+        if (item.path().filename().native().starts_with(scratchPrefix)) existingScratch.insert(item.path());
+    fs::path watchedScratch;
     cancel = false;
     const auto inFlight = [&] {
         std::jthread watch([&](std::stop_token stop) {
             // Only the helper creates this file, so cancellation happens after it starts.
             while (!stop.stop_requested()) {
                 std::error_code error;
-                for (fs::directory_iterator it(inFlightOutput, error), end; !error && it != end; it.increment(error)) {
-                    if (fs::exists(it->path() / "result.7z", error)) {
+                for (fs::directory_iterator it(scratchRoot, error), end; !error && it != end; it.increment(error)) {
+                    const auto& path = it->path();
+                    if (path.filename().native().starts_with(scratchPrefix) && !existingScratch.contains(path) &&
+                        fs::exists(path / "result.7z", error)) {
+                        watchedScratch = path;
                         cancel = true;
                         return;
                     }
@@ -443,6 +461,7 @@ void runTests(const fs::path& root, const fs::path& fixtures) {
     }();
     expect(inFlight.cancelled && inFlight.failed == 0 && inFlight.outputs.empty() && fs::is_empty(inFlightOutput),
            "Cancel the running helper and remove its incomplete output");
+    expect(!watchedScratch.empty() && !fs::exists(watchedScratch), "Remove private scratch after cancellation");
 }
 }
 
@@ -461,7 +480,8 @@ int main(int argc, char** argv) {
 #endif
         TestDirectory root(fs::absolute(argv[1]));
 #ifdef _WIN32
-        expect(_wputenv_s(L"TEMP", root.path.c_str()) == 0 && _wputenv_s(L"TMP", root.path.c_str()) == 0,
+        expect(_wputenv_s(L"TEMP", root.path.c_str()) == 0 && _wputenv_s(L"TMP", root.path.c_str()) == 0 &&
+               _wputenv_s(L"LOCALAPPDATA", root.path.c_str()) == 0,
                "Set workspace-local temporary directory");
 #else
         expect(setenv("TMPDIR", root.path.c_str(), 1) == 0, "Set workspace-local temporary directory");

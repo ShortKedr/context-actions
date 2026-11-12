@@ -37,6 +37,6 @@ The installers are preview builds. The macOS package is unsigned and the app use
 
 Standalone Office document and spreadsheet format conversion is planned for a later stage. PDF export is available with the platform's Office backend.
 
-The original CMD and PowerShell prototypes are archived in [`legacy/`](legacy/) for reference. The distribution includes the native app and its bundled components. [Bundled components](docs/third-party.md)
+The original CMD and PowerShell prototypes are archived as plain text in [`legacy/`](legacy/). The distribution includes the native app and its bundled components. [Bundled components](docs/third-party.md)
 
 [Original project plan](CONTEXT_ACTIONS_PLAN.md)

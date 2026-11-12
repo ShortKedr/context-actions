@@ -26,7 +26,7 @@ if(WIN32)
   target_compile_options(actions_core PRIVATE "/d1trimfile:${CMAKE_CURRENT_SOURCE_DIR}")
   target_compile_definitions(actions_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
   target_sources(actions_core PRIVATE src/windows/platform.cpp src/windows/office.cpp)
-  target_link_libraries(actions_core PUBLIC ole32 oleaut32 shell32 shlwapi uuid)
+  target_link_libraries(actions_core PUBLIC advapi32 ole32 oleaut32 shell32 shlwapi uuid)
   # scripts/build-ui.ps1 builds the WinUI host using the native XAML MSBuild targets.
   add_library(ContextActionsShell SHARED src/shell.cpp resources/shell.def resources/app.rc)
   target_link_libraries(ContextActionsShell PRIVATE actions_core)

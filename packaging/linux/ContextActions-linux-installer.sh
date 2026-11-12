@@ -16,43 +16,51 @@ if (($# != 0)); then
     fail 'Open the installer without arguments to select a package.'
 fi
 command -v pkexec >/dev/null || fail 'Context Actions Installer requires PolicyKit (pkexec).'
+command -v curl >/dev/null || fail 'Context Actions Installer requires curl to verify the release package.'
 
 package=$(zenity --file-selection --title='Select a Context Actions package' \
     --file-filter='Context Actions packages | *.deb *.rpm *.pkg.tar.zst') || exit 0
-package=$(realpath -- "$package") || fail 'Could not find the selected package.'
-case "$package" in
-    *.deb)
-        command -v dpkg-deb >/dev/null || fail 'This system cannot install DEB packages.'
-        manager=/usr/bin/apt-get
-        [[ -x "$manager" ]] || fail 'This system cannot install DEB packages.'
-        name=$(dpkg-deb --field "$package" Package) || fail 'Could not read the DEB package.'
-        version=$(dpkg-deb --field "$package" Version) || fail 'Could not read the package version.'
-        dpkg --validate-version "$version" >/dev/null 2>&1 || fail 'Could not read the package version.'
-        format=deb
-        ;;
-    *.rpm)
-        command -v rpm >/dev/null || fail 'This system cannot install RPM packages.'
-        manager=/usr/bin/dnf
-        [[ -x "$manager" ]] || fail 'This system cannot install RPM packages.'
-        name=$(rpm -qp --queryformat '%{NAME}' "$package") || fail 'Could not read the RPM package.'
-        version=$(rpm -qp --queryformat '%{EPOCHNUM}:%{VERSION}-%{RELEASE}' "$package") ||
-            fail 'Could not read the package version.'
-        [[ "$version" =~ ^[0-9]+:[[:alnum:]_.+~^]+-[[:alnum:]_.+~^]+$ ]] ||
-            fail 'Could not read the package version.'
-        format=rpm
-        ;;
-    *.pkg.tar.zst)
-        manager=/usr/bin/pacman
-        [[ -x "$manager" ]] && command -v vercmp >/dev/null || fail 'This system cannot install Arch packages.'
-        metadata=$(LC_ALL=C "$manager" -Qp -- "$package") || fail 'Could not read the Arch package.'
-        read -r name version <<< "$metadata"
-        [[ "$version" =~ ^([0-9]+:)?[[:alnum:]_.+~]+-[0-9]+(\.[0-9]+)?$ ]] ||
-            fail 'Could not read the package version.'
-        format=arch
-        ;;
-    *) fail 'Select a Context Actions DEB, RPM or Arch package.' ;;
-esac
-[[ "$name" == context-actions && -n "$version" ]] || fail 'Select a Context Actions package.'
+[[ -f "$package" && -r "$package" ]] || fail 'Could not read the selected package.'
+package_bytes=$(stat -Lc %s -- "$package") || fail 'Could not determine the package size.'
+((package_bytes > 0 && package_bytes <= 512 * 1024 * 1024)) ||
+    fail 'The selected package must be nonempty and no larger than 512 MiB.'
+
+# Use the asset names and package versions produced by scripts/prepare-release.sh.
+asset=${package##*/}
+release_pattern='([0-9]+\.[0-9]+\.[0-9]+)'
+if [[ "$asset" =~ ^context-actions_${release_pattern}_(amd64|arm64)\.deb$ ]]; then
+    release=${BASH_REMATCH[1]}
+    version=$release
+    format=deb
+    manager=/usr/bin/apt-get
+elif [[ "$asset" =~ ^context-actions-${release_pattern}-1\.(x86_64|aarch64)\.rpm$ ]]; then
+    release=${BASH_REMATCH[1]}
+    version="0:$release-1"
+    format=rpm
+    manager=/usr/bin/dnf
+elif [[ "$asset" =~ ^context-actions-${release_pattern}-1-x86_64\.pkg\.tar\.zst$ ]]; then
+    release=${BASH_REMATCH[1]}
+    version="$release-1"
+    format=arch
+    manager=/usr/bin/pacman
+else
+    fail 'Select an official Context Actions release package with its original filename.'
+fi
+
+release_url="https://github.com/ShortKedr/context-actions/releases/download/v$release"
+checksums=$(curl --disable --fail --silent --show-error --location --max-time 30 \
+    --proto '=https' --proto-redir '=https' "$release_url/SHA256SUMS.txt") ||
+    fail "Could not retrieve the official checksums for Context Actions $release."
+expected=$(awk -v asset="$asset" '$2 == asset { print $1 }' <<< "$checksums")
+[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail 'The selected package is missing from the official release checksums.'
+actual=$(head -c "$((package_bytes + 1))" < "$package" | sha256sum) ||
+    fail 'Could not calculate the package checksum.'
+[[ "${actual%% *}" == "$expected" ]] || fail 'The selected package does not match the official release checksum.'
+
+[[ -x "$manager" ]] || fail "This system cannot install $format packages."
+if [[ "$format" == arch ]]; then
+    command -v vercmp >/dev/null || fail 'This system cannot compare Arch package versions.'
+fi
 
 installed_versions() {
     local entries status=0
@@ -133,17 +141,42 @@ if [[ "$same_version" == true || -n "$older_than" ]]; then
 fi
 
 if [[ "$format" == arch ]]; then
-    command_line=("$manager" --noconfirm -U -- "$package")
+    command_line=("$manager" --noconfirm -U --)
 else
-    command_line=("$manager" "${options[@]}" "$action" "$package")
+    command_line=("$manager" "${options[@]}" "$action")
 fi
+
+# The invoking user opens the selected path. The privileged process only reads
+# its stdin and installs from a root-owned copy after checking those exact bytes.
+root_install=$(cat <<'ROOT_INSTALL'
+set -euo pipefail
+expected=$1
+asset=$2
+export CONTEXT_ACTIONS_GUI_DOWNGRADE=$3 DEBIAN_FRONTEND=noninteractive
+package_bytes=$4
+shift 4
+stage=$(/usr/bin/mktemp -d /tmp/context-actions-install.XXXXXXXX)
+trap '/usr/bin/rm -rf -- "$stage"' EXIT
+staged="$stage/$asset"
+/usr/bin/head -c "$((package_bytes + 1))" > "$staged"
+actual=$(/usr/bin/sha256sum < "$staged")
+if [[ "$(/usr/bin/stat -c %s -- "$staged")" != "$package_bytes" || "${actual%% *}" != "$expected" ]]; then
+    printf '%s\n' 'The package changed before installation. Download it again from the official release.' >&2
+    exit 1
+fi
+# APT can read the verified local file through its _apt sandbox user.
+/usr/bin/chmod 0644 -- "$staged"
+/usr/bin/chmod 0755 -- "$stage"
+"$@" "$staged" < /dev/null
+ROOT_INSTALL
+)
 
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
 if (
     status=0
-    pkexec --disable-internal-agent /usr/bin/env "CONTEXT_ACTIONS_GUI_DOWNGRADE=$override" \
-        DEBIAN_FRONTEND=noninteractive "${command_line[@]}" >"$log" 2>&1 ||
+    pkexec --disable-internal-agent /bin/bash -c "$root_install" context-actions-install \
+        "$expected" "$asset" "$override" "$package_bytes" "${command_line[@]}" >"$log" 2>&1 < "$package" ||
         status=$?
     printf '100\n'
     exit "$status"

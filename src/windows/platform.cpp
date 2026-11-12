@@ -2,6 +2,8 @@
 #include "../platform.h"
 #include <algorithm>
 #include <cwctype>
+#include <sddl.h>
+#include <shlobj.h>
 #include <sstream>
 #include <system_error>
 
@@ -53,7 +55,7 @@ void launch(const fs::path& executable, const std::vector<std::wstring>& args) {
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
 }
 ProcessResult runProcess(const fs::path& exe, const std::vector<std::wstring>& args, std::atomic_bool& cancel,
-    const std::function<void(const std::string&)>& onOutput, uint32_t timeoutMs) {
+    const std::function<void(const std::string&)>& onOutput, uint32_t timeoutMs, size_t processMemoryLimit) {
     if (cancel) throw Cancelled();
     std::wstring line=quote(exe.wstring()); for (const auto& arg:args) line+=L" "+quote(arg);
     if (line.size()>=32767) fail(tr("invalid"));
@@ -63,6 +65,10 @@ ProcessResult runProcess(const fs::path& exe, const std::vector<std::wstring>& a
     SetHandleInformation(reader.value,HANDLE_FLAG_INHERIT,0);
     Handle job(CreateJobObjectW(nullptr,nullptr));
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{}; limits.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (processMemoryLimit) {
+        limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+        limits.ProcessMemoryLimit = processMemoryLimit;
+    }
     if (!job.value || !SetInformationJobObject(job.value,JobObjectExtendedLimitInformation,&limits,sizeof(limits))) fail(systemError(GetLastError()));
     STARTUPINFOW startup{sizeof(startup)}; startup.dwFlags=STARTF_USESTDHANDLES;startup.hStdInput=nullInput.value;startup.hStdOutput=writer.value;startup.hStdError=writer.value;
     PROCESS_INFORMATION process{};
@@ -92,15 +98,36 @@ ProcessResult runProcess(const fs::path& exe, const std::vector<std::wstring>& a
     if (cancel) throw Cancelled();
     DWORD code=1; GetExitCodeProcess(child.value,&code); return {static_cast<uint32_t>(code),output};
 }
+fs::path conversionScratchRoot() {
+    PWSTR path = nullptr;
+    const auto result = SHGetKnownFolderPath(FOLDERID_LocalAppData,
+        KF_FLAG_NO_PACKAGE_REDIRECTION | KF_FLAG_DONT_VERIFY, nullptr, &path);
+    const std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> owned(path, CoTaskMemFree);
+    check(result);
+    return fs::path(owned.get());
+}
+
 fs::path dataDirectory() {
     wchar_t value[32768]{};
-    if (GetEnvironmentVariableW(L"CONTEXT_ACTIONS_DATA_DIR", value, 32768)) return fs::path(value);
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", value, 32768)) throw std::runtime_error("LOCALAPPDATA is unavailable");
+    const auto size = GetEnvironmentVariableW(L"CONTEXT_ACTIONS_DATA_DIR", value, static_cast<DWORD>(std::size(value)));
+    if (size && size < std::size(value)) return fs::path(value);
+    const auto localAppDataSize = GetEnvironmentVariableW(L"LOCALAPPDATA", value, static_cast<DWORD>(std::size(value)));
+    if (!localAppDataSize || localAppDataSize >= std::size(value))
+        throw std::runtime_error("LOCALAPPDATA is unavailable");
     return fs::path(value) / L"Context Actions";
 }
 
 void createPrivateDirectory(const fs::path& path) {
-    if (!fs::create_directory(path)) fail(tr("conflict") + pathText(path));
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    // A protected ACL gives the owner and SYSTEM access and is inherited by intermediates.
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)", SDDL_REVISION_1, &descriptor, nullptr))
+        fail(systemError(GetLastError()));
+    SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor, FALSE};
+    const auto created = CreateDirectoryW(path.c_str(), &attributes);
+    const auto error = GetLastError();
+    LocalFree(descriptor);
+    if (!created) fail(systemError(error));
 }
 
 void ensurePrivateDirectory(const fs::path& path) { fs::create_directories(path); }
@@ -154,6 +181,16 @@ void moveFile(const fs::path& from, const fs::path& to, bool replace) {
         const auto error = GetLastError();
         fail(pathText(from) + L" → " + pathText(to) + L"\n" + systemError(error));
     }
+}
+void publishFile(const fs::path& from, const fs::path& to) {
+    if (MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH)) return;
+    auto error = GetLastError();
+    if (error == ERROR_NOT_SAME_DEVICE) {
+        if (CopyFileExW(from.c_str(), to.c_str(), nullptr, nullptr, nullptr,
+                        COPY_FILE_FAIL_IF_EXISTS | COPY_FILE_COPY_SYMLINK)) return;
+        error = GetLastError();
+    }
+    fail(pathText(from) + L" → " + pathText(to) + L"\n" + systemError(error));
 }
 void withRenameLock(const fs::path& file, const std::function<void()>& operation) {
     const Handle lock(CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
