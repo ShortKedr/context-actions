@@ -193,7 +193,8 @@ jobs:
           test -r /usr/share/nautilus-python/extensions/context_actions.py
           test -x /usr/share/kio/servicemenus/io.github.ShortKedr.ContextActions.servicemenu.desktop
           /usr/bin/context-actions --help
-          bash "$source_dir/scripts/smoke-test-posix.sh" /usr/bin/context-actions "$source_dir/build"
+          runuser -u context-actions-builder -- bash "$source_dir/scripts/smoke-test-posix.sh" \
+            /usr/bin/context-actions "$source_dir/build"
           mkdir -p "$GITHUB_WORKSPACE/dist/linux-arch"
           install -m 0644 "$package" "$GITHUB_WORKSPACE/dist/linux-arch/"
           cd "$GITHUB_WORKSPACE/dist/linux-arch"
