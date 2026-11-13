@@ -66,8 +66,11 @@ void appendMediaInput(std::vector<std::wstring>& args, const fs::path& input) {
     // Only self-contained formats from the supported media matrix may be probed.
     args.insert(args.end(), {L"-protocol_whitelist", L"file", L"-format_whitelist",
         L"mov,mp4,m4a,matroska,webm,avi,asf,mpegts,mp3,aac,loas,wav,flac,ogg,aiff,"
-        L"jpeg_pipe,png_pipe,apng,webp_pipe,bmp_pipe,tiff_pipe,gif,gif_pipe",
-        L"-i", pathText(input)});
+        L"jpeg_pipe,png_pipe,apng,webp_pipe,bmp_pipe,tiff_pipe,gif,gif_pipe"});
+    // FFmpeg can detect a single JPEG as image2 when its end marker is beyond the probe buffer.
+    const auto ext = lower(pathText(input.extension()));
+    if (ext == L".jpg" || ext == L".jpeg") args.insert(args.end(), {L"-f", L"jpeg_pipe"});
+    args.insert(args.end(), {L"-i", pathText(input)});
 }
 double probeDuration(const fs::path& input, std::atomic_bool& cancel) {
     std::vector<std::wstring> args{L"-v",L"error",L"-show_entries",L"format=duration",L"-of",L"default=noprint_wrappers=1:nokey=1"};

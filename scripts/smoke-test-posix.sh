@@ -56,13 +56,18 @@ grep -qx 'codec_name=aac' "$info"
 
 run image --action image --format webp -- "$image"
 test -s "$work/Кадр & 100%_image.webp"
-run pdf --action pdf -- "$image"
-pdf="$work/Кадр & 100%_pdf.pdf"
+# A detailed image produces a large intermediate JPEG that FFmpeg can detect as image2.
+pdf_image="$work/PDF & 100%.png"
+pdf_jpeg="$work/PDF & 100%.jpg"
+ffmpeg -v error -nostdin -f lavfi -i 'testsrc2=s=800x600' -frames:v 1 -update 1 "$pdf_image"
+ffmpeg -v error -nostdin -i "$pdf_image" -frames:v 1 -update 1 "$pdf_jpeg"
+run pdf --action pdf -- "$pdf_image"
+pdf="$work/PDF & 100%_pdf.pdf"
 test "$(qpdf --show-npages "$pdf")" = 1
 newline_pdf="$work/"$'Existing\nPage.pdf'
 cp "$pdf" "$newline_pdf"
-run merge --action pdf -- "$image" "$newline_pdf"
-test "$(qpdf --show-npages "$work/Кадр & 100%_pdf (2).pdf")" = 2
+run merge --action pdf -- "$pdf_image" "$pdf_jpeg" "$newline_pdf"
+test "$(qpdf --show-npages "$work/PDF & 100%_pdf (2).pdf")" = 3
 
 printf '%s\n' 'Batch rename test' > "$document"
 tar -cf "$work/repack-source.tar" -C "$work" "$(basename "$document")"

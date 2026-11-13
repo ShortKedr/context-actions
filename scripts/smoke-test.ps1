@@ -97,14 +97,19 @@ try {
             Check ($frame.width -eq 32 -and $frame.height -eq 24) "Incorrect image resize: $($file.Name)"
         }
     }
-    $pdf = @(App 'pdf' 'pdf' @($image))
+    # A detailed image produces a large intermediate JPEG that FFmpeg can detect as image2.
+    $pdfImage = Join-Path $testDirectory 'pdf-source.png'
+    Native $ffmpeg @('-v','error','-f','lavfi','-i','testsrc2=s=800x600','-frames:v','1','-update','1',$pdfImage)
+    $pdfJpeg = Join-Path $testDirectory 'pdf-source.jpg'
+    Native $ffmpeg @('-v','error','-i',$pdfImage,'-frames:v','1','-update','1',$pdfJpeg)
+    $pdf = @(App 'pdf' 'pdf' @($pdfImage))
     Check ($pdf.Count -eq 1) 'Missing PDF'
     Native $qpdf @('--check',$pdf[0].FullName)
-    $merged = @(App 'pdf' 'merged' (@($pdf[0].FullName) + $imageInputs) @('--first-frame'))
+    $merged = @(App 'pdf' 'merged' (@($pdf[0].FullName,$pdfJpeg) + $imageInputs) @('--first-frame'))
     Check ($merged.Count -eq 1) 'Missing merged PDF'
     Native $qpdf @('--check',$merged[0].FullName)
     $pages = & $qpdf --show-npages $merged[0].FullName
-    Check ($LASTEXITCODE -eq 0 -and $pages -eq [string](1 + $imageInputs.Count)) 'PDF page merge failed'
+    Check ($LASTEXITCODE -eq 0 -and $pages -eq [string](2 + $imageInputs.Count)) 'PDF page merge failed'
 
     $audioSource = Join-Path $testDirectory 'Звук.wav'
     Native $ffmpeg @('-v','error','-i',$video,'-vn','-c:a','pcm_s16le',$audioSource)
